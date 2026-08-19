@@ -30,7 +30,7 @@ function parseLoop(el) {
     };
   }
   const [std] = children(el, 'standardLoopCharacteristics');
-  return std ? { cardinality: text(std, 'loopMaximum') } : null;
+  return std ? { cardinality: std.getAttribute('loopMaximum') } : null;
 }
 
 function parseTimer(el) {

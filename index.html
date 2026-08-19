@@ -33,11 +33,23 @@
   #canvas { flex: 1 1 auto; min-height: 0; }
 
   footer {
-    height: 92px; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 14px;
+    padding: 16px 0 22px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px;
   }
 
-  #caption { height: 22px; font-size: 13.5px; color: var(--faint); }
+  #legend {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 18px;
+    font-size: 12.5px; color: var(--faint);
+  }
+  #legend span { cursor: default; transition: color .2s; }
+  #legend span:hover { color: var(--ink); }
+  #legend span.model::before {
+    content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--active); margin-right: 6px; vertical-align: 1.5px;
+  }
+
+  #caption { height: 46px; font-size: 13.5px; color: var(--faint); text-align: center; }
+  #caption .setting { font-size: 12.5px; font-style: italic; margin-top: 2px; }
   #caption .label { color: var(--ink); }
   #caption .sig {
     margin-left: 12px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
@@ -69,7 +81,16 @@
   .djs-element.is-running .djs-visual > :nth-child(1) {
     stroke: var(--active) !important; stroke-width: 2px !important;
   }
+  .djs-element.is-model .djs-visual > :nth-child(1) { fill: #fbf6ee !important; }
+  .djs-element.is-lit .djs-visual > :nth-child(1) {
+    stroke: var(--active) !important; stroke-width: 2px !important;
+  }
   .djs-element.is-done .djs-visual > :nth-child(1) { stroke: var(--done) !important; }
+
+  .djs-element[data-element-id^="note"] .djs-visual text { fill: var(--faint) !important; }
+  .djs-element[data-element-id^="note"] .djs-visual path {
+    fill: none !important; stroke: var(--line) !important;
+  }
 
   .count {
     font-family: ui-monospace, Menlo, monospace; font-size: 10.5px;
@@ -88,6 +109,7 @@
 
 <footer>
   <div id="caption"></div>
+  <div id="legend"></div>
   <button id="run">Run</button>
 </footer>
 

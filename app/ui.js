@@ -1,5 +1,5 @@
 import { parseBpmn, Engine } from './engine.js';
-import { getPrimitive } from './primitives.js';
+import { PRIMITIVES, getPrimitive } from './primitives.js';
 
 const BPMN_URL = 'workflows/pipeline.bpmn';
 const PROCESS_ID = 'Process_Pipeline';
@@ -18,12 +18,24 @@ async function loadDiagram() {
   processes = parseBpmn(xml);
   viewer = new BpmnJS({ container: '#canvas' });
   await viewer.importXML(xml);
-  viewer.get('canvas').zoom('fit-viewport', 'auto');
+  const fit = () => viewer.get('canvas').zoom('fit-viewport', 'auto');
+  fit();
+  requestAnimationFrame(fit);
+  window.addEventListener('resize', fit);
+
+  for (const scope of processes.values()) {
+    eachElement(scope, (el) => {
+      if (el.op && getPrimitive(el.op.name).model) mark(el.id, 'is-model');
+    });
+  }
 
   const bus = viewer.get('eventBus');
   bus.on('element.hover', ({ element }) => {
     const el = running ? null : find(element.id);
-    if (el?.op) show(el.op.name);
+    if (el?.op) {
+      const primitive = getPrimitive(el.op.name);
+      caption(primitive.label, primitive.signature, settings(el.op.params, true));
+    }
   });
   bus.on('element.out', () => { if (!running) caption(); });
 }
@@ -44,15 +56,26 @@ function find(id) {
   return null;
 }
 
-function caption(label = '', signature = '') {
+// What the modeller fills in, as opposed to what flows in from another task.
+const SETTINGS = ['prompt', 'shape', 'question', 'source', 'where', 'test', 'metric', 'by', 'how', 'on', 'model'];
+
+function caption(label = '', signature = '', setting = '') {
   $('caption').innerHTML = label
     ? `<span class="label">${label}</span><span class="sig">${signature}</span>`
+      + (setting ? `<div class="setting">${setting}</div>` : '')
     : '';
 }
 
-function show(name) {
+function settings(params, quoted = false) {
+  return SETTINGS
+    .filter((k) => params[k] !== undefined)
+    .map((k) => (quoted ? String(params[k]).replace(/^'|'$/g, '') : params[k]))
+    .join(' · ');
+}
+
+function show(name, params = {}) {
   const primitive = getPrimitive(name);
-  caption(primitive.label, primitive.signature);
+  caption(primitive.label, primitive.signature, settings(params));
 }
 
 function mark(id, cls) {
@@ -98,18 +121,18 @@ async function run() {
   const services = {
     wait: sleep,
     call: async (name, params) => {
+      show(name, params);
       await sleep(jitter(getPrimitive(name).ms));
       if (params.fails > Math.random()) throw new Error('unavailable');
+      const parts = params.parts?.flat(Infinity).map(size);
+      if (name === 'join') return { count: Math.min(...parts) };
       return {
-        count: params.count
-          ?? (params.parts ? params.parts.flat(Infinity).reduce((t, p) => t + size(p), 0)
-            : size(params.of)),
+        count: params.count ?? (parts ? parts.reduce((t, n) => t + n, 0) : size(params.of)),
       };
     },
     onEvent: async ({ type, element, index, total }) => {
       if (type === 'enter') {
         mark(element.id, element.scope ? 'is-running' : 'is-active');
-        if (element.op) show(element.op.name);
         await sleep(35);
       } else if (type === 'exit') {
         unmark(element.id, 'is-active');
@@ -128,6 +151,26 @@ async function run() {
   $('run').textContent = 'Run again';
 }
 
+function renderLegend() {
+  $('legend').innerHTML = Object.entries(PRIMITIVES)
+    .map(([name, p]) => `<span data-name="${name}"${p.model ? ' class="model"' : ''}>${p.label}</span>`)
+    .join('');
+
+  $('legend').onmouseover = ({ target }) => {
+    const { name } = target.dataset;
+    if (!name || running) return;
+    show(name);
+    for (const scope of processes.values()) {
+      eachElement(scope, (el) => { if (el.op?.name === name) mark(el.id, 'is-lit'); });
+    }
+  };
+  $('legend').onmouseout = () => {
+    if (running) return;
+    caption();
+    for (const scope of processes.values()) eachElement(scope, (el) => unmark(el.id, 'is-lit'));
+  };
+}
+
 await loadDiagram();
+renderLegend();
 $('run').onclick = () => run();
-setTimeout(run, 900);
