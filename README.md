@@ -1,102 +1,61 @@
 # Analysis pipeline as BPMN
 
-A toy that asks one question: **what if a qualitative-analysis pipeline were a
-diagram you can run, instead of a stack of scripts wired together by pasting
-output paths between them?**
+A qualitative-analysis pipeline — narratives in, statistics out — modelled as a
+BPMN diagram you can run, instead of a stack of scripts wired together by pasting
+output paths between them.
 
-[**Open the live demo →**](https://teekuningas.github.io/bpmn-analysis-pipeline/)
+[**Live demo**](https://teekuningas.github.io/bpmn-analysis-pipeline/) — runs in
+the browser. No server, no build step, no API key.
 
-Everything runs in the browser. No server, no build step, no API key, no
-dependencies beyond a vendored copy of [bpmn-js](https://bpmn.io) for drawing.
+![the pipeline](docs/diagram.png)
 
----
+## What the diagram says
 
-## The idea
+- Each box is a **service task** naming an op from the registry in `app/ops.js`.
+  The BPMN file references names, never paths or model ids.
+- **Nested multi-instance loops**: for each narrative, for each iteration, ask the
+  model for a codebook. Then one embedding call per pooled code. The loops are
+  BPMN, not hidden inside a function.
+- A **parallel fork**: narratives → themes on one branch, site context on the
+  other, joined before the statistics.
+- A **user task**: where to cut the dendrogram is a person's decision, so the
+  process stops and asks.
+- An **exclusive gateway**: chi-square or Fisher exact, chosen by input rather
+  than by editing code.
 
-A real analysis pipeline — interviews in, statistics out — usually ends up as a
-handful of scripts plus a Makefile, glued together by constants like:
-
-```python
-INPUT_FILE = "output/koodit/487ef9e9/koodit_raw.txt"      # in script B
-THEMES     = "output/analyysi_koodit/7176421e/themes.csv" # in script C's Makefile
-```
-
-Nothing checks that those agree. The order of the steps lives in a human's head,
-the branch structure lives in a Makefile, and the fact that a person eyeballs a
-dendrogram halfway through is written down nowhere at all.
-
-Here the same shape of pipeline is modelled as **one BPMN process**:
-
-- Every box is a **service task** naming an op from a **registry**
-  (`corpus.read`, `llm.embed`, `stats.chi_square`, …). The diagram references
-  names — never paths, model ids or run hashes.
-- The loops of LLM calls are **real BPMN multi-instance activities**, not hidden
-  inside a mega-function. You can watch `12/12` narratives and `70/70` code
-  embeddings tick past on the diagram as they run.
-- The pipeline **forks**: narratives → themes on one branch, site context on the
-  other, joined before the statistics. A real DAG, not a straight line.
-- The judgement call — *where do I cut the dendrogram?* — is a **user task**.
-  The process stops and asks. That step exists in every real pipeline and is
-  usually invisible.
-- Values passed between tasks are **artifact references**
-  (`{artifact: "3f9c…", kind: "codes", n: 70}`), never payloads. Same inputs,
-  same id.
-
-## What it actually computes
-
-Twelve short synthetic Finnish nature narratives (six rural, six urban) go in.
-The pipeline induces a codebook from them, embeds and clusters the codes,
-consolidates each cluster into a theme, scores every narrative against every
-theme, and tests theme presence against site type with chi-square + FDR.
-
-It recovers what was planted: *Maaseutuympäristö* with rural sites,
-*Liikenteen melu* and *Kaupungin viheralueet* with urban ones.
+Tasks pass artifact references (`{artifact: "3f9c…", kind: "codes", n: 140}`),
+never payloads.
 
 ## Running it
 
 ```sh
-git clone https://github.com/teekuningas/bpmn-analysis-pipeline
-cd bpmn-analysis-pipeline
-python3 -m http.server 8000     # any static server; ES modules need http, not file://
+python3 -m http.server 8000    # ES modules need http, not file://
 ```
-
-Then open <http://localhost:8000>.
 
 ## Layout
 
 ```
-workflows/pipeline.bpmn   the process. open it in any BPMN modeller and edit it
-app/registry.js           op registration + catalogue
-app/ops.js                the 14 ops. each is 5-30 lines
-app/mockllm.js            deterministic stand-in for the LLM
-app/engine.js             ~200-line BPMN interpreter (the toy part)
-app/artifacts.js          content-addressed store
-app/ui.js                 diagram, token highlighting, inputs, inspector
-demo/data/                12 synthetic narratives + their site metadata
+workflows/pipeline.bpmn   the process
+app/ops.js                the ops
+app/mockllm.js            deterministic stand-in for the model
+app/engine.js             BPMN interpreter
+app/registry.js           op names
+app/artifacts.js          artifact store
+app/ui.js                 page
+demo/data/                12 synthetic narratives, six rural and six urban
 ```
 
-## Honest limits
+## Limits
 
-**The LLM is fake.** `app/mockllm.js` is a keyword lexicon plus a hashed-trigram
-embedding, so the demo is deterministic, offline and free. Every op that would
-call a model is tagged `llm` in the registry; pointing those at a real endpoint
-is a change to that one file. The *workflow* is what is being demonstrated, not
-the model.
+The LLM is fake: `app/mockllm.js` is a keyword lexicon and a hashed-trigram
+embedding, so runs are deterministic and offline. Ops that would call a model are
+tagged `llm`.
 
-**The engine is a toy.** `app/engine.js` covers start/end events, service tasks,
-user tasks, parallel and exclusive gateways, expanded sub-processes and
-multi-instance loops — enough for this pipeline and nothing else. No timers, no
-messages, no compensation, no persistence, no real parallelism (multi-instance
-activities run one after another; only the two top-level branches interleave).
-For anything real use [SpiffWorkflow](https://github.com/sartography/SpiffWorkflow)
-(Python), [bpmn-engine](https://github.com/paed01/bpmn-engine) (Node), or
-Camunda/Flowable.
+The engine is a toy: it covers the elements this diagram uses and nothing else —
+no timers, messages, compensation, persistence, or real parallelism. For real
+work use [SpiffWorkflow](https://github.com/sartography/SpiffWorkflow),
+[bpmn-engine](https://github.com/paed01/bpmn-engine), or Camunda. The service
+tasks follow SpiffWorkflow's `spiff:serviceTaskOperator` convention; the only
+dialect difference is that parameter expressions here are JavaScript.
 
-The service-task XML deliberately follows SpiffWorkflow's
-`spiff:serviceTaskOperator` convention, so the same `.bpmn` can be handed to a
-real engine — the only dialect difference is that parameter expressions here are
-JavaScript (`inputs.seed`) rather than Python (`inputs['seed']`).
-
-**The statistics are minimal.** A 2×2 chi-square with Cramér's V and
-Benjamini-Hochberg correction. No mixed-effects models, no clustering by
-participant — with twelve narratives there is nothing yet to be careful about.
+The data is invented for this demo. No real interview data is in this repository.

@@ -1,32 +1,24 @@
-// Wires the diagram, the engine and the page together.
-//
-// Everything here is presentation. The pipeline itself does not know a browser
-// exists -- swap this file for a CLI and the same .bpmn and the same registry
-// would run unchanged.
-
 import { parseBpmn, Engine } from './engine.js';
 import { getOp, catalog } from './registry.js';
 import { ArtifactStore } from './artifacts.js';
-import './ops.js'; // registers every op as a side effect
+import './ops.js';
 
 const BPMN_URL = 'workflows/pipeline.bpmn';
 const PROCESS_ID = 'Process_NatureNarratives';
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const escapeHtml = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 let viewer;
 let processes;
-let calls = new Map();     // elementId -> { op, params, result, instances }
+let calls = new Map();
 let overlayIds = [];
 const progressState = new Map();
-
-// ------------------------------------------------------------------ diagram --
 
 async function loadDiagram() {
   const xml = await (await fetch(BPMN_URL)).text();
   processes = parseBpmn(xml);
-
   viewer = new BpmnJS({ container: '#canvas' });
   await viewer.importXML(xml);
   viewer.get('canvas').zoom('fit-viewport', 'auto');
@@ -34,10 +26,17 @@ async function loadDiagram() {
 }
 
 function mark(id, cls) {
-  try { viewer.get('canvas').addMarker(id, cls); } catch { /* not on the diagram */ }
+  try { viewer.get('canvas').addMarker(id, cls); } catch { /* off-diagram */ }
 }
 function unmark(id, cls) {
-  try { viewer.get('canvas').removeMarker(id, cls); } catch { /* ignore */ }
+  try { viewer.get('canvas').removeMarker(id, cls); } catch { /* off-diagram */ }
+}
+
+function eachElement(scope, fn) {
+  for (const el of scope.elements.values()) {
+    fn(el);
+    if (el.scope) eachElement(el.scope, fn);
+  }
 }
 
 function clearDiagram() {
@@ -45,12 +44,9 @@ function clearDiagram() {
   overlayIds.forEach((id) => overlays.remove(id));
   overlayIds = [];
   progressState.clear();
-  for (const scope of processes.values()) markAllScopes(scope, unmark);
-}
-function markAllScopes(scope, fn) {
-  for (const el of scope.elements.values()) {
-    ['pipeline-active', 'pipeline-done', 'pipeline-waiting'].forEach((c) => fn(el.id, c));
-    if (el.scope) markAllScopes(el.scope, fn);
+  for (const scope of processes.values()) {
+    eachElement(scope, (el) => ['pipeline-active', 'pipeline-done', 'pipeline-waiting']
+      .forEach((c) => unmark(el.id, c)));
   }
 }
 
@@ -66,18 +62,12 @@ function badgeProgress(element, evt) {
   overlayIds.push(id);
 }
 
-// ---------------------------------------------------------------- inspector --
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-}
-
 function inspect(elementId) {
   const call = calls.get(elementId);
   const box = $('inspector');
   if (!call) {
     box.className = 'hint';
-    box.textContent = 'No call recorded for this element yet.';
+    box.textContent = 'Nothing recorded for this element.';
     return;
   }
   const op = catalog().find((o) => o.name === call.op);
@@ -85,14 +75,10 @@ function inspect(elementId) {
   box.innerHTML = `
     <div class="op">${escapeHtml(call.op)}</div>
     <p style="margin:4px 0 8px">${op ? escapeHtml(op.summary) : ''}</p>
-    ${call.instances > 1 ? `<p class="hint">ran ${call.instances}x (multi-instance)</p>` : ''}
-    <strong style="font-size:12px">parameters</strong>
+    ${call.instances > 1 ? `<p class="hint">ran ${call.instances}x</p>` : ''}
     <pre>${escapeHtml(JSON.stringify(call.params, null, 2))}</pre>
-    <strong style="font-size:12px">result</strong>
     <pre>${escapeHtml(JSON.stringify(call.result, null, 2))}</pre>`;
 }
-
-// --------------------------------------------------------------------- log --
 
 function log(line) {
   const el = $('log');
@@ -100,38 +86,62 @@ function log(line) {
   el.scrollTop = el.scrollHeight;
 }
 
-// --------------------------------------------------------------- user task --
-
 function askUser(element, data) {
   return new Promise((resolve) => {
-    const form = element.form;
-    const slot = $('question-slot');
-    slot.innerHTML = `
+    const { form } = element;
+    $('question-slot').innerHTML = `
       <div class="question">
         <h3>${escapeHtml(element.name)}</h3>
-        <p>${escapeHtml(form.label)}. The pipeline is waiting &mdash; this step is a
-           person's judgement call, so the diagram says so out loud.
-           ${data.pooled ? `${data.pooled.n} codes were pooled.` : ''}</p>
+        <p>${escapeHtml(form.label)}${data.pooled ? `, over ${data.pooled.n} codes` : ''}.</p>
         <input type="number" id="q-value" value="0.22"
                min="${form.min}" max="${form.max}" step="${form.step}"/>
         <p style="margin-top:10px"><button id="q-ok">Continue</button></p>
       </div>`;
     $('q-ok').onclick = () => {
       const value = parseFloat($('q-value').value);
-      slot.innerHTML = '';
-      log(`threshold set to ${value} by the analyst`);
+      $('question-slot').innerHTML = '';
+      log(`threshold ${value}`);
       resolve(value);
     };
   });
 }
 
-// --------------------------------------------------------------------- run --
+function showResults(store, data) {
+  const report = store.get(data.report);
+  const box = $('results');
+  if (!report.rows.length) {
+    box.textContent = 'No associations.';
+    return;
+  }
+  box.className = '';
+  box.innerHTML = `
+    <p class="hint" style="margin-top:0">${data.matrix.themes.length} themes,
+      ${data.context.levels.join(' / ')}, n = ${report.n_records}.</p>
+    <table>
+      <tr><th>theme</th><th>context</th><th class="num">in</th><th class="num">out</th>
+          <th class="num">p</th><th class="num">q</th></tr>
+      ${report.rows.map((r) => `
+        <tr class="${r.significant ? 'sig' : ''}">
+          <td>${escapeHtml(r.theme)}</td><td>${escapeHtml(r.predictor)}</td>
+          <td class="num">${r.prevalence_in}</td><td class="num">${r.prevalence_out}</td>
+          <td class="num">${r.p_value}</td><td class="num">${r.p_fdr}</td>
+        </tr>`).join('')}
+    </table>`;
+}
+
+function renderRegistry() {
+  $('registry').innerHTML = catalog().map((o) => `
+    <div style="margin-bottom:10px">
+      <div class="op">${o.name}${o.callsLlm ? ' <span class="tag">llm</span>' : ''}</div>
+      <div class="hint">${escapeHtml(o.summary)}</div>
+    </div>`).join('');
+}
 
 async function run() {
   $('run').disabled = true;
   $('log').textContent = '';
   $('results').className = 'hint';
-  $('results').textContent = 'running...';
+  $('results').textContent = 'running';
   calls = new Map();
   clearDiagram();
 
@@ -146,9 +156,7 @@ async function run() {
       mark(element.id, 'pipeline-waiting');
       const value = await askUser(element, data);
       unmark(element.id, 'pipeline-waiting');
-      calls.set(element.id, {
-        op: '(human decision)', params: { field: element.form.field }, result: value,
-      });
+      calls.set(element.id, { op: 'human decision', params: { field: element.form.field }, result: value });
       return value;
     },
     onEvent: async (evt) => {
@@ -171,76 +179,38 @@ async function run() {
           instances: (prev ? prev.instances || 1 : 0) + 1,
         });
       } else if (evt.type === 'result') {
-        const prev = calls.get(element.id) || {};
-        calls.set(element.id, { ...prev, result: evt.result });
+        calls.set(element.id, { ...(calls.get(element.id) || {}), result: evt.result });
       }
     },
   };
 
-  const engine = new Engine(processes, services);
+  const iterations = Number($('in-iterations').value);
   const inputs = {
     data_path: 'demo/data',
     filter_mode: $('in-filter-mode').value,
     min_words: 20,
-    seed: Number($('in-seed').value),
+    seeds: Array.from({ length: iterations }, (_, i) => i + 1),
     min_cluster_size: Number($('in-min-cluster').value),
     prevalence_min: Number($('in-prev-min').value),
     prevalence_max: Number($('in-prev-max').value),
+    test: $('in-test').value,
     alpha: Number($('in-alpha').value),
     context_variable: 'site',
     top_n: 12,
   };
 
   try {
-    const data = await engine.run(PROCESS_ID, { inputs });
+    const data = await new Engine(processes, services).run(PROCESS_ID, { inputs });
     showResults(store, data);
-    log('done.');
+    log('done');
   } catch (err) {
-    log(`ERROR: ${err.message}`);
-    $('results').textContent = `Failed: ${err.message}`;
+    log(`error: ${err.message}`);
+    $('results').textContent = err.message;
     throw err;
   } finally {
     $('run').disabled = false;
   }
 }
-
-function showResults(store, data) {
-  const report = store.get(data.report);
-  const box = $('results');
-  if (!report.rows.length) {
-    box.textContent = 'No associations found.';
-    return;
-  }
-  box.className = '';
-  box.innerHTML = `
-    <p class="hint" style="margin-top:0">${data.matrix.themes.length} themes x
-      ${data.context.levels.join(' / ')}, n = ${report.n_records} narratives.
-      Green rows survive FDR correction.</p>
-    <table>
-      <tr><th>theme</th><th>context</th><th class="num">in</th><th class="num">out</th>
-          <th class="num">V</th><th class="num">p</th><th class="num">q</th></tr>
-      ${report.rows.map((r) => `
-        <tr class="${r.significant ? 'sig' : ''}">
-          <td>${escapeHtml(r.theme)}</td><td>${escapeHtml(r.predictor)}</td>
-          <td class="num">${r.prevalence_in}</td><td class="num">${r.prevalence_out}</td>
-          <td class="num">${r.cramers_v}</td><td class="num">${r.p_value}</td>
-          <td class="num">${r.p_fdr}</td>
-        </tr>`).join('')}
-    </table>`;
-}
-
-function renderRegistry() {
-  $('registry').innerHTML = catalog().map((o) => `
-    <div style="margin-bottom:10px">
-      <div class="op">${o.name}${o.callsLlm
-    ? ' <span class="mi-badge" style="background:var(--muted)">llm</span>' : ''}</div>
-      <div style="font-size:12px;color:var(--muted)">${escapeHtml(o.summary)}</div>
-      <div style="font-size:11.5px;color:var(--muted);font-family:ui-monospace,monospace">
-        (${Object.keys(o.params || {}).join(', ')})</div>
-    </div>`).join('');
-}
-
-// -------------------------------------------------------------------- boot --
 
 await loadDiagram();
 renderRegistry();
@@ -250,8 +220,7 @@ $('reset').onclick = () => {
   calls = new Map();
   $('log').textContent = '';
   $('results').className = 'hint';
-  $('results').textContent = 'Run the pipeline to get results.';
+  $('results').textContent = 'Run to get results.';
   $('inspector').className = 'hint';
-  $('inspector').textContent = 'Click any task in the diagram to see the op it calls.';
+  $('inspector').textContent = 'Click a task.';
 };
-log(`${catalog().length} ops registered`);

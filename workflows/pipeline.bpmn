@@ -10,7 +10,7 @@
 
   <bpmn:process id="Process_NatureNarratives" name="Nature narrative analysis" isExecutable="true">
 
-    <bpmn:startEvent id="StartEvent_1" name="Start">
+    <bpmn:startEvent id="StartEvent_1">
       <bpmn:outgoing>Flow_start_read</bpmn:outgoing>
     </bpmn:startEvent>
 
@@ -32,8 +32,6 @@
       <bpmn:outgoing>Flow_fork_context</bpmn:outgoing>
     </bpmn:parallelGateway>
 
-    <!-- ============ branch A: narratives -> themes ============ -->
-
     <bpmn:serviceTask id="Task_FilterCorpus" name="Filter corpus">
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="corpus.filter" resultVariable="filtered">
@@ -48,54 +46,77 @@
       <bpmn:outgoing>Flow_filter_sub</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <bpmn:subProcess id="SubProcess_Induce" name="Induce codes (per narrative)">
+    <bpmn:subProcess id="SubProcess_Narrative" name="For each narrative">
       <bpmn:incoming>Flow_filter_sub</bpmn:incoming>
       <bpmn:outgoing>Flow_sub_flatten</bpmn:outgoing>
       <bpmn:multiInstanceLoopCharacteristics isSequential="false">
         <bpmn:loopDataInputRef>filtered.items</bpmn:loopDataInputRef>
         <bpmn:inputDataItem name="rec_id"/>
         <bpmn:loopDataOutputRef>codebooks</bpmn:loopDataOutputRef>
-        <bpmn:outputDataItem name="codes"/>
+        <bpmn:outputDataItem name="iterations"/>
       </bpmn:multiInstanceLoopCharacteristics>
 
-      <bpmn:startEvent id="Start_Induce">
-        <bpmn:outgoing>Flow_i1</bpmn:outgoing>
+      <bpmn:startEvent id="Start_Narrative">
+        <bpmn:outgoing>Flow_n1</bpmn:outgoing>
       </bpmn:startEvent>
 
-      <bpmn:serviceTask id="Task_GenCodebook" name="Generate codebook">
-        <bpmn:extensionElements>
-          <spiff:serviceTaskOperator id="llm.generate_codebook" resultVariable="freeform">
-            <spiff:parameters>
-              <spiff:parameter id="corpus" type="any" value="filtered"/>
-              <spiff:parameter id="rec_id" type="str" value="rec_id"/>
-              <spiff:parameter id="seed" type="int" value="inputs.seed"/>
-            </spiff:parameters>
-          </spiff:serviceTaskOperator>
-        </bpmn:extensionElements>
-        <bpmn:incoming>Flow_i1</bpmn:incoming>
-        <bpmn:outgoing>Flow_i2</bpmn:outgoing>
-      </bpmn:serviceTask>
+      <bpmn:subProcess id="SubProcess_Iteration" name="For each iteration">
+        <bpmn:incoming>Flow_n1</bpmn:incoming>
+        <bpmn:outgoing>Flow_n2</bpmn:outgoing>
+        <bpmn:multiInstanceLoopCharacteristics isSequential="false">
+          <bpmn:loopDataInputRef>inputs.seeds</bpmn:loopDataInputRef>
+          <bpmn:inputDataItem name="seed"/>
+          <bpmn:loopDataOutputRef>iterations</bpmn:loopDataOutputRef>
+          <bpmn:outputDataItem name="codes"/>
+        </bpmn:multiInstanceLoopCharacteristics>
 
-      <bpmn:serviceTask id="Task_StructureCodes" name="Structure as JSON">
-        <bpmn:extensionElements>
-          <spiff:serviceTaskOperator id="llm.structure_codes" resultVariable="codes">
-            <spiff:parameters>
-              <spiff:parameter id="freeform" type="any" value="freeform"/>
-              <spiff:parameter id="rec_id" type="str" value="rec_id"/>
-            </spiff:parameters>
-          </spiff:serviceTaskOperator>
-        </bpmn:extensionElements>
-        <bpmn:incoming>Flow_i2</bpmn:incoming>
-        <bpmn:outgoing>Flow_i3</bpmn:outgoing>
-      </bpmn:serviceTask>
+        <bpmn:startEvent id="Start_Iteration">
+          <bpmn:outgoing>Flow_i1</bpmn:outgoing>
+        </bpmn:startEvent>
 
-      <bpmn:endEvent id="End_Induce">
-        <bpmn:incoming>Flow_i3</bpmn:incoming>
+        <bpmn:serviceTask id="Task_GenCodebook" name="Generate codebook">
+          <bpmn:extensionElements>
+            <spiff:serviceTaskOperator id="llm.generate_codebook" resultVariable="freeform">
+              <spiff:parameters>
+                <spiff:parameter id="corpus" type="any" value="filtered"/>
+                <spiff:parameter id="rec_id" type="str" value="rec_id"/>
+                <spiff:parameter id="seed" type="int" value="seed"/>
+              </spiff:parameters>
+            </spiff:serviceTaskOperator>
+          </bpmn:extensionElements>
+          <bpmn:incoming>Flow_i1</bpmn:incoming>
+          <bpmn:outgoing>Flow_i2</bpmn:outgoing>
+        </bpmn:serviceTask>
+
+        <bpmn:serviceTask id="Task_StructureCodes" name="Structure as JSON">
+          <bpmn:extensionElements>
+            <spiff:serviceTaskOperator id="llm.structure_codes" resultVariable="codes">
+              <spiff:parameters>
+                <spiff:parameter id="freeform" type="any" value="freeform"/>
+                <spiff:parameter id="rec_id" type="str" value="rec_id"/>
+                <spiff:parameter id="seed" type="int" value="seed"/>
+              </spiff:parameters>
+            </spiff:serviceTaskOperator>
+          </bpmn:extensionElements>
+          <bpmn:incoming>Flow_i2</bpmn:incoming>
+          <bpmn:outgoing>Flow_i3</bpmn:outgoing>
+        </bpmn:serviceTask>
+
+        <bpmn:endEvent id="End_Iteration">
+          <bpmn:incoming>Flow_i3</bpmn:incoming>
+        </bpmn:endEvent>
+
+        <bpmn:sequenceFlow id="Flow_i1" sourceRef="Start_Iteration" targetRef="Task_GenCodebook"/>
+        <bpmn:sequenceFlow id="Flow_i2" sourceRef="Task_GenCodebook" targetRef="Task_StructureCodes"/>
+        <bpmn:sequenceFlow id="Flow_i3" sourceRef="Task_StructureCodes" targetRef="End_Iteration"/>
+      </bpmn:subProcess>
+
+      <bpmn:endEvent id="End_Narrative">
+        <bpmn:incoming>Flow_n2</bpmn:incoming>
       </bpmn:endEvent>
 
-      <bpmn:sequenceFlow id="Flow_i1" sourceRef="Start_Induce" targetRef="Task_GenCodebook"/>
-      <bpmn:sequenceFlow id="Flow_i2" sourceRef="Task_GenCodebook" targetRef="Task_StructureCodes"/>
-      <bpmn:sequenceFlow id="Flow_i3" sourceRef="Task_StructureCodes" targetRef="End_Induce"/>
+      <bpmn:sequenceFlow id="Flow_n1" sourceRef="Start_Narrative" targetRef="SubProcess_Iteration"/>
+      <bpmn:sequenceFlow id="Flow_n2" sourceRef="SubProcess_Iteration" targetRef="End_Narrative"/>
     </bpmn:subProcess>
 
     <bpmn:serviceTask id="Task_FlattenCodes" name="Pool all codes">
@@ -159,7 +180,7 @@
           <spiff:parameters>
             <spiff:parameter id="clusters" type="any" value="clusters"/>
             <spiff:parameter id="index" type="int" value="cluster_index"/>
-            <spiff:parameter id="seed" type="int" value="inputs.seed"/>
+            <spiff:parameter id="seed" type="int" value="inputs.seeds[0]"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -180,7 +201,7 @@
             <spiff:parameter id="corpus" type="any" value="filtered"/>
             <spiff:parameter id="rec_id" type="str" value="rec_id"/>
             <spiff:parameter id="codebook" type="any" value="codebook"/>
-            <spiff:parameter id="seed" type="int" value="inputs.seed"/>
+            <spiff:parameter id="seed" type="int" value="inputs.seeds[0]"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -208,8 +229,6 @@
       <bpmn:outgoing>Flow_prev_join</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <!-- ============ branch B: ecological / spatial context ============ -->
-
     <bpmn:serviceTask id="Task_LoadContext" name="Load site context">
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="context.load" resultVariable="context">
@@ -223,13 +242,17 @@
       <bpmn:outgoing>Flow_context_join</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <!-- ============ merge and analyse ============ -->
-
     <bpmn:parallelGateway id="Gateway_Join">
       <bpmn:incoming>Flow_prev_join</bpmn:incoming>
       <bpmn:incoming>Flow_context_join</bpmn:incoming>
-      <bpmn:outgoing>Flow_join_chi</bpmn:outgoing>
+      <bpmn:outgoing>Flow_join_test</bpmn:outgoing>
     </bpmn:parallelGateway>
+
+    <bpmn:exclusiveGateway id="Gateway_Test">
+      <bpmn:incoming>Flow_join_test</bpmn:incoming>
+      <bpmn:outgoing>Flow_test_chi</bpmn:outgoing>
+      <bpmn:outgoing>Flow_test_fisher</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
 
     <bpmn:serviceTask id="Task_ChiSquare" name="Chi-square tests">
       <bpmn:extensionElements>
@@ -240,9 +263,28 @@
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
-      <bpmn:incoming>Flow_join_chi</bpmn:incoming>
-      <bpmn:outgoing>Flow_chi_fdr</bpmn:outgoing>
+      <bpmn:incoming>Flow_test_chi</bpmn:incoming>
+      <bpmn:outgoing>Flow_chi_merge</bpmn:outgoing>
     </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_Fisher" name="Fisher exact tests">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="stats.fisher_exact" resultVariable="tests">
+          <spiff:parameters>
+            <spiff:parameter id="matrix" type="any" value="matrix"/>
+            <spiff:parameter id="context" type="any" value="context"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_test_fisher</bpmn:incoming>
+      <bpmn:outgoing>Flow_fisher_merge</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_TestMerge">
+      <bpmn:incoming>Flow_chi_merge</bpmn:incoming>
+      <bpmn:incoming>Flow_fisher_merge</bpmn:incoming>
+      <bpmn:outgoing>Flow_merge_fdr</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
 
     <bpmn:serviceTask id="Task_FDR" name="FDR correction">
       <bpmn:extensionElements>
@@ -253,7 +295,7 @@
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
-      <bpmn:incoming>Flow_chi_fdr</bpmn:incoming>
+      <bpmn:incoming>Flow_merge_fdr</bpmn:incoming>
       <bpmn:outgoing>Flow_fdr_report</bpmn:outgoing>
     </bpmn:serviceTask>
 
@@ -271,7 +313,7 @@
       <bpmn:outgoing>Flow_report_end</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <bpmn:endEvent id="EndEvent_1" name="Results">
+    <bpmn:endEvent id="EndEvent_1">
       <bpmn:incoming>Flow_report_end</bpmn:incoming>
     </bpmn:endEvent>
 
@@ -279,8 +321,8 @@
     <bpmn:sequenceFlow id="Flow_read_fork" sourceRef="Task_ReadCorpus" targetRef="Gateway_Fork"/>
     <bpmn:sequenceFlow id="Flow_fork_filter" sourceRef="Gateway_Fork" targetRef="Task_FilterCorpus"/>
     <bpmn:sequenceFlow id="Flow_fork_context" sourceRef="Gateway_Fork" targetRef="Task_LoadContext"/>
-    <bpmn:sequenceFlow id="Flow_filter_sub" sourceRef="Task_FilterCorpus" targetRef="SubProcess_Induce"/>
-    <bpmn:sequenceFlow id="Flow_sub_flatten" sourceRef="SubProcess_Induce" targetRef="Task_FlattenCodes"/>
+    <bpmn:sequenceFlow id="Flow_filter_sub" sourceRef="Task_FilterCorpus" targetRef="SubProcess_Narrative"/>
+    <bpmn:sequenceFlow id="Flow_sub_flatten" sourceRef="SubProcess_Narrative" targetRef="Task_FlattenCodes"/>
     <bpmn:sequenceFlow id="Flow_flatten_embed" sourceRef="Task_FlattenCodes" targetRef="Task_Embed"/>
     <bpmn:sequenceFlow id="Flow_embed_user" sourceRef="Task_Embed" targetRef="UserTask_Threshold"/>
     <bpmn:sequenceFlow id="Flow_user_cluster" sourceRef="UserTask_Threshold" targetRef="Task_Cluster"/>
@@ -289,8 +331,14 @@
     <bpmn:sequenceFlow id="Flow_score_prev" sourceRef="Task_ScorePresence" targetRef="Task_Prevalence"/>
     <bpmn:sequenceFlow id="Flow_prev_join" sourceRef="Task_Prevalence" targetRef="Gateway_Join"/>
     <bpmn:sequenceFlow id="Flow_context_join" sourceRef="Task_LoadContext" targetRef="Gateway_Join"/>
-    <bpmn:sequenceFlow id="Flow_join_chi" sourceRef="Gateway_Join" targetRef="Task_ChiSquare"/>
-    <bpmn:sequenceFlow id="Flow_chi_fdr" sourceRef="Task_ChiSquare" targetRef="Task_FDR"/>
+    <bpmn:sequenceFlow id="Flow_join_test" sourceRef="Gateway_Join" targetRef="Gateway_Test"/>
+    <bpmn:sequenceFlow id="Flow_test_chi" name="chi-square" sourceRef="Gateway_Test" targetRef="Task_ChiSquare">
+      <bpmn:conditionExpression>inputs.test === 'chi_square'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_test_fisher" name="fisher" sourceRef="Gateway_Test" targetRef="Task_Fisher"/>
+    <bpmn:sequenceFlow id="Flow_chi_merge" sourceRef="Task_ChiSquare" targetRef="Gateway_TestMerge"/>
+    <bpmn:sequenceFlow id="Flow_fisher_merge" sourceRef="Task_Fisher" targetRef="Gateway_TestMerge"/>
+    <bpmn:sequenceFlow id="Flow_merge_fdr" sourceRef="Gateway_TestMerge" targetRef="Task_FDR"/>
     <bpmn:sequenceFlow id="Flow_fdr_report" sourceRef="Task_FDR" targetRef="Task_Report"/>
     <bpmn:sequenceFlow id="Flow_report_end" sourceRef="Task_Report" targetRef="EndEvent_1"/>
   </bpmn:process>
@@ -299,137 +347,175 @@
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_NatureNarratives">
 
       <bpmndi:BPMNShape id="Shape_StartEvent_1" bpmnElement="StartEvent_1">
-        <dc:Bounds x="152" y="182" width="36" height="36"/>
+        <dc:Bounds x="152" y="222" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_ReadCorpus" bpmnElement="Task_ReadCorpus">
-        <dc:Bounds x="240" y="160" width="100" height="80"/>
+        <dc:Bounds x="240" y="200" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Gateway_Fork" bpmnElement="Gateway_Fork">
-        <dc:Bounds x="400" y="175" width="50" height="50"/>
+        <dc:Bounds x="400" y="215" width="50" height="50"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_FilterCorpus" bpmnElement="Task_FilterCorpus">
-        <dc:Bounds x="510" y="160" width="100" height="80"/>
+        <dc:Bounds x="510" y="200" width="100" height="80"/>
       </bpmndi:BPMNShape>
 
-      <bpmndi:BPMNShape id="Shape_SubProcess_Induce" bpmnElement="SubProcess_Induce" isExpanded="true">
-        <dc:Bounds x="670" y="120" width="420" height="160"/>
+      <bpmndi:BPMNShape id="Shape_SubProcess_Narrative" bpmnElement="SubProcess_Narrative" isExpanded="true">
+        <dc:Bounds x="670" y="120" width="620" height="240"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Shape_Start_Induce" bpmnElement="Start_Induce">
-        <dc:Bounds x="700" y="182" width="36" height="36"/>
+      <bpmndi:BPMNShape id="Shape_Start_Narrative" bpmnElement="Start_Narrative">
+        <dc:Bounds x="700" y="222" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_SubProcess_Iteration" bpmnElement="SubProcess_Iteration" isExpanded="true">
+        <dc:Bounds x="770" y="160" width="410" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Start_Iteration" bpmnElement="Start_Iteration">
+        <dc:Bounds x="795" y="222" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_GenCodebook" bpmnElement="Task_GenCodebook">
-        <dc:Bounds x="770" y="160" width="100" height="80"/>
+        <dc:Bounds x="860" y="200" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_StructureCodes" bpmnElement="Task_StructureCodes">
-        <dc:Bounds x="900" y="160" width="100" height="80"/>
+        <dc:Bounds x="1000" y="200" width="100" height="80"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Shape_End_Induce" bpmnElement="End_Induce">
-        <dc:Bounds x="1030" y="182" width="36" height="36"/>
+      <bpmndi:BPMNShape id="Shape_End_Iteration" bpmnElement="End_Iteration">
+        <dc:Bounds x="1130" y="222" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_Narrative" bpmnElement="End_Narrative">
+        <dc:Bounds x="1220" y="222" width="36" height="36"/>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="Shape_Task_FlattenCodes" bpmnElement="Task_FlattenCodes">
-        <dc:Bounds x="1150" y="160" width="100" height="80"/>
+        <dc:Bounds x="1350" y="200" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_Embed" bpmnElement="Task_Embed">
-        <dc:Bounds x="1150" y="360" width="100" height="80"/>
+        <dc:Bounds x="1350" y="440" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_UserTask_Threshold" bpmnElement="UserTask_Threshold">
-        <dc:Bounds x="990" y="360" width="100" height="80"/>
+        <dc:Bounds x="1190" y="440" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_Cluster" bpmnElement="Task_Cluster">
-        <dc:Bounds x="830" y="360" width="100" height="80"/>
+        <dc:Bounds x="1030" y="440" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_NameClusters" bpmnElement="Task_NameClusters">
-        <dc:Bounds x="670" y="360" width="100" height="80"/>
+        <dc:Bounds x="870" y="440" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_ScorePresence" bpmnElement="Task_ScorePresence">
-        <dc:Bounds x="510" y="360" width="100" height="80"/>
+        <dc:Bounds x="710" y="440" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_Prevalence" bpmnElement="Task_Prevalence">
-        <dc:Bounds x="200" y="560" width="100" height="80"/>
+        <dc:Bounds x="200" y="640" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_LoadContext" bpmnElement="Task_LoadContext">
-        <dc:Bounds x="350" y="740" width="100" height="80"/>
+        <dc:Bounds x="200" y="860" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Gateway_Join" bpmnElement="Gateway_Join">
-        <dc:Bounds x="510" y="575" width="50" height="50"/>
+        <dc:Bounds x="400" y="655" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_Test" bpmnElement="Gateway_Test">
+        <dc:Bounds x="530" y="655" width="50" height="50"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_ChiSquare" bpmnElement="Task_ChiSquare">
-        <dc:Bounds x="620" y="560" width="100" height="80"/>
+        <dc:Bounds x="660" y="580" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Fisher" bpmnElement="Task_Fisher">
+        <dc:Bounds x="660" y="720" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_TestMerge" bpmnElement="Gateway_TestMerge">
+        <dc:Bounds x="840" y="655" width="50" height="50"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_FDR" bpmnElement="Task_FDR">
-        <dc:Bounds x="780" y="560" width="100" height="80"/>
+        <dc:Bounds x="950" y="640" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_Task_Report" bpmnElement="Task_Report">
-        <dc:Bounds x="940" y="560" width="100" height="80"/>
+        <dc:Bounds x="1110" y="640" width="100" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Shape_EndEvent_1" bpmnElement="EndEvent_1">
-        <dc:Bounds x="1100" y="582" width="36" height="36"/>
+        <dc:Bounds x="1270" y="662" width="36" height="36"/>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNEdge id="Edge_Flow_start_read" bpmnElement="Flow_start_read">
-        <di:waypoint x="188" y="200"/><di:waypoint x="240" y="200"/>
+        <di:waypoint x="188" y="240"/><di:waypoint x="240" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_read_fork" bpmnElement="Flow_read_fork">
-        <di:waypoint x="340" y="200"/><di:waypoint x="400" y="200"/>
+        <di:waypoint x="340" y="240"/><di:waypoint x="400" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_fork_filter" bpmnElement="Flow_fork_filter">
-        <di:waypoint x="450" y="200"/><di:waypoint x="510" y="200"/>
+        <di:waypoint x="450" y="240"/><di:waypoint x="510" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_fork_context" bpmnElement="Flow_fork_context">
-        <di:waypoint x="425" y="225"/><di:waypoint x="425" y="740"/>
+        <di:waypoint x="425" y="265"/><di:waypoint x="425" y="540"/>
+        <di:waypoint x="150" y="540"/><di:waypoint x="150" y="900"/>
+        <di:waypoint x="200" y="900"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_filter_sub" bpmnElement="Flow_filter_sub">
-        <di:waypoint x="610" y="200"/><di:waypoint x="670" y="200"/>
+        <di:waypoint x="610" y="240"/><di:waypoint x="670" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_n1" bpmnElement="Flow_n1">
+        <di:waypoint x="736" y="240"/><di:waypoint x="770" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_i1" bpmnElement="Flow_i1">
-        <di:waypoint x="736" y="200"/><di:waypoint x="770" y="200"/>
+        <di:waypoint x="831" y="240"/><di:waypoint x="860" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_i2" bpmnElement="Flow_i2">
-        <di:waypoint x="870" y="200"/><di:waypoint x="900" y="200"/>
+        <di:waypoint x="960" y="240"/><di:waypoint x="1000" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_i3" bpmnElement="Flow_i3">
-        <di:waypoint x="1000" y="200"/><di:waypoint x="1030" y="200"/>
+        <di:waypoint x="1100" y="240"/><di:waypoint x="1130" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_n2" bpmnElement="Flow_n2">
+        <di:waypoint x="1180" y="240"/><di:waypoint x="1220" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_sub_flatten" bpmnElement="Flow_sub_flatten">
-        <di:waypoint x="1090" y="200"/><di:waypoint x="1150" y="200"/>
+        <di:waypoint x="1290" y="240"/><di:waypoint x="1350" y="240"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_flatten_embed" bpmnElement="Flow_flatten_embed">
-        <di:waypoint x="1200" y="240"/><di:waypoint x="1200" y="360"/>
+        <di:waypoint x="1400" y="280"/><di:waypoint x="1400" y="440"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_embed_user" bpmnElement="Flow_embed_user">
-        <di:waypoint x="1150" y="400"/><di:waypoint x="1090" y="400"/>
+        <di:waypoint x="1350" y="480"/><di:waypoint x="1290" y="480"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_user_cluster" bpmnElement="Flow_user_cluster">
-        <di:waypoint x="990" y="400"/><di:waypoint x="930" y="400"/>
+        <di:waypoint x="1190" y="480"/><di:waypoint x="1130" y="480"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_cluster_name" bpmnElement="Flow_cluster_name">
-        <di:waypoint x="830" y="400"/><di:waypoint x="770" y="400"/>
+        <di:waypoint x="1030" y="480"/><di:waypoint x="970" y="480"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_name_score" bpmnElement="Flow_name_score">
-        <di:waypoint x="670" y="400"/><di:waypoint x="610" y="400"/>
+        <di:waypoint x="870" y="480"/><di:waypoint x="810" y="480"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_score_prev" bpmnElement="Flow_score_prev">
-        <di:waypoint x="560" y="440"/><di:waypoint x="560" y="500"/>
-        <di:waypoint x="250" y="500"/><di:waypoint x="250" y="560"/>
+        <di:waypoint x="760" y="520"/><di:waypoint x="760" y="570"/>
+        <di:waypoint x="250" y="570"/><di:waypoint x="250" y="640"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_prev_join" bpmnElement="Flow_prev_join">
-        <di:waypoint x="300" y="600"/><di:waypoint x="510" y="600"/>
+        <di:waypoint x="300" y="680"/><di:waypoint x="400" y="680"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_context_join" bpmnElement="Flow_context_join">
-        <di:waypoint x="450" y="780"/><di:waypoint x="535" y="780"/><di:waypoint x="535" y="625"/>
+        <di:waypoint x="300" y="900"/><di:waypoint x="425" y="900"/><di:waypoint x="425" y="705"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Edge_Flow_join_chi" bpmnElement="Flow_join_chi">
-        <di:waypoint x="560" y="600"/><di:waypoint x="620" y="600"/>
+      <bpmndi:BPMNEdge id="Edge_Flow_join_test" bpmnElement="Flow_join_test">
+        <di:waypoint x="450" y="680"/><di:waypoint x="530" y="680"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Edge_Flow_chi_fdr" bpmnElement="Flow_chi_fdr">
-        <di:waypoint x="720" y="600"/><di:waypoint x="780" y="600"/>
+      <bpmndi:BPMNEdge id="Edge_Flow_test_chi" bpmnElement="Flow_test_chi">
+        <di:waypoint x="555" y="655"/><di:waypoint x="555" y="620"/><di:waypoint x="660" y="620"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_test_fisher" bpmnElement="Flow_test_fisher">
+        <di:waypoint x="555" y="705"/><di:waypoint x="555" y="760"/><di:waypoint x="660" y="760"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_chi_merge" bpmnElement="Flow_chi_merge">
+        <di:waypoint x="760" y="620"/><di:waypoint x="865" y="620"/><di:waypoint x="865" y="655"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_fisher_merge" bpmnElement="Flow_fisher_merge">
+        <di:waypoint x="760" y="760"/><di:waypoint x="865" y="760"/><di:waypoint x="865" y="705"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_merge_fdr" bpmnElement="Flow_merge_fdr">
+        <di:waypoint x="890" y="680"/><di:waypoint x="950" y="680"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_fdr_report" bpmnElement="Flow_fdr_report">
-        <di:waypoint x="880" y="600"/><di:waypoint x="940" y="600"/>
+        <di:waypoint x="1050" y="680"/><di:waypoint x="1110" y="680"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Edge_Flow_report_end" bpmnElement="Flow_report_end">
-        <di:waypoint x="1040" y="600"/><di:waypoint x="1100" y="600"/>
+        <di:waypoint x="1210" y="680"/><di:waypoint x="1270" y="680"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
