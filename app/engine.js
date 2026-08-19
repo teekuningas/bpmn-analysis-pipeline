@@ -1,14 +1,15 @@
-// Minimal BPMN interpreter: events, service tasks, user tasks, gateways,
-// sub-processes, multi-instance loops. Nothing else.
+// Minimal BPMN interpreter: events, tasks, gateways, sub-processes,
+// multi-instance and standard loops, error boundaries, timers.
 
 const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
-const TASKISH = new Set(['serviceTask', 'userTask', 'subProcess', 'task', 'scriptTask']);
+const TASKISH = new Set(['serviceTask', 'userTask', 'manualTask', 'subProcess', 'task']);
 
 const localName = (node) => node.localName || node.nodeName.replace(/^.*:/, '');
 const children = (node, name) => [...node.childNodes]
   .filter((n) => n.nodeType === 1 && localName(n) === name);
 const deepFind = (node, name) => [...node.getElementsByTagName('*')]
   .filter((n) => localName(n) === name);
+const text = (node, name) => (children(node, name)[0] || {}).textContent;
 
 function parseOperator(el) {
   const [ext] = children(el, 'extensionElements');
@@ -16,37 +17,27 @@ function parseOperator(el) {
   if (!operator) return null;
   const params = {};
   for (const p of deepFind(operator, 'parameter')) params[p.getAttribute('id')] = p.getAttribute('value');
-  return {
-    name: operator.getAttribute('id'),
-    resultVariable: operator.getAttribute('resultVariable'),
-    params,
-  };
+  return { name: operator.getAttribute('id'), resultVariable: operator.getAttribute('resultVariable'), params };
 }
 
-function parseForm(el) {
-  const [ext] = children(el, 'extensionElements');
-  const [form] = ext ? deepFind(ext, 'form') : [];
-  if (!form) return null;
-  return {
-    field: form.getAttribute('field'),
-    min: form.getAttribute('min'),
-    max: form.getAttribute('max'),
-    step: form.getAttribute('step'),
-    label: form.getAttribute('label') || form.getAttribute('field'),
-  };
-}
-
-function parseMultiInstance(el) {
+function parseLoop(el) {
   const [mi] = children(el, 'multiInstanceLoopCharacteristics');
-  if (!mi) return null;
-  const text = (name) => (children(mi, name)[0] || {}).textContent;
-  const itemName = (name) => (children(mi, name)[0] || {}).getAttribute?.('name');
-  return {
-    inputRef: text('loopDataInputRef'),
-    inputItem: itemName('inputDataItem'),
-    outputRef: text('loopDataOutputRef'),
-    outputItem: itemName('outputDataItem'),
-  };
+  if (mi) {
+    return {
+      cardinality: text(mi, 'loopCardinality'),
+      outputRef: text(mi, 'loopDataOutputRef'),
+      outputItem: (children(mi, 'outputDataItem')[0] || {}).getAttribute?.('name'),
+    };
+  }
+  const [std] = children(el, 'standardLoopCharacteristics');
+  return std ? { cardinality: text(std, 'loopMaximum') } : null;
+}
+
+function parseTimer(el) {
+  const [def] = children(el, 'timerEventDefinition');
+  const duration = def && text(def, 'timeDuration');
+  const match = duration && duration.match(/PT([\d.]+)S/);
+  return match ? Number(match[1]) * 1000 : null;
 }
 
 function parseScope(node) {
@@ -60,16 +51,17 @@ function parseScope(node) {
       flows.push({
         source: child.getAttribute('sourceRef'),
         target: child.getAttribute('targetRef'),
-        condition: (children(child, 'conditionExpression')[0] || {}).textContent || null,
+        condition: text(child, 'conditionExpression') || null,
       });
     } else if (TASKISH.has(type) || type.endsWith('Event') || type.endsWith('Gateway')) {
       elements.set(id, {
         id,
         type,
-        name: child.getAttribute('name') || id,
-        op: type === 'serviceTask' ? parseOperator(child) : null,
-        form: type === 'userTask' ? parseForm(child) : null,
-        mi: parseMultiInstance(child),
+        name: child.getAttribute('name') || '',
+        attachedTo: child.getAttribute('attachedToRef'),
+        timer: parseTimer(child),
+        op: parseOperator(child),
+        loop: parseLoop(child),
         scope: type === 'subProcess' ? parseScope(child) : null,
         incoming: [],
         outgoing: [],
@@ -82,9 +74,15 @@ function parseScope(node) {
     elements.get(flow.target)?.incoming.push(flow);
   }
 
+  const boundaries = new Map();
+  for (const el of elements.values()) if (el.attachedTo) boundaries.set(el.attachedTo, el);
+
   return {
     elements,
-    startIds: [...elements.values()].filter((e) => !e.incoming.length).map((e) => e.id),
+    boundaries,
+    startIds: [...elements.values()]
+      .filter((e) => !e.incoming.length && !e.attachedTo)
+      .map((e) => e.id),
   };
 }
 
@@ -99,7 +97,7 @@ export function parseBpmn(xmlText) {
   return processes;
 }
 
-export function evaluate(expression, data) {
+function evaluate(expression, data) {
   const keys = Object.keys(data).filter((k) => /^[A-Za-z_$][\w$]*$/.test(k));
   try {
     return new Function(...keys, `"use strict"; return (${expression});`)(...keys.map((k) => data[k]));
@@ -115,9 +113,7 @@ export class Engine {
   }
 
   async run(processId, data) {
-    const scope = this.processes.get(processId);
-    if (!scope) throw new Error(`no process "${processId}"`);
-    await this.runScope(scope, data);
+    await this.runScope(this.processes.get(processId), data);
     return data;
   }
 
@@ -134,8 +130,17 @@ export class Engine {
         if (seen < el.incoming.length) continue;
       }
 
-      await this.execute(el, data);
-      for (const flow of this.successors(el, data)) queue.push(flow.target);
+      try {
+        await this.execute(el, data);
+      } catch (err) {
+        const handler = scope.boundaries.get(el.id);
+        if (!handler) throw err;
+        await this.execute(handler, data);
+        queue.push(...handler.outgoing.map((f) => f.target));
+        continue;
+      }
+
+      queue.push(...this.successors(el, data).map((f) => f.target));
     }
   }
 
@@ -148,51 +153,39 @@ export class Engine {
   }
 
   async execute(el, data) {
-    await this.services.onEvent({ type: 'enter', element: el, data });
-    if (el.mi) await this.runMultiInstance(el, data);
+    await this.services.onEvent({ type: 'enter', element: el });
+    if (el.loop) await this.runLoop(el, data);
     else await this.executeBody(el, data);
-    await this.services.onEvent({ type: 'exit', element: el, data });
+    await this.services.onEvent({ type: 'exit', element: el });
   }
 
-  async runMultiInstance(el, data) {
-    const items = evaluate(el.mi.inputRef, data);
-    if (!Array.isArray(items)) throw new Error(`"${el.mi.inputRef}" is not a list`);
-
+  // A multi-instance loop isolates each instance and collects the results.
+  // A standard loop is plain repetition over the same data.
+  async runLoop(el, data) {
+    const total = Number(evaluate(el.loop.cardinality, data));
+    const collects = Boolean(el.loop.outputRef);
     const collected = [];
-    for (let i = 0; i < items.length; i++) {
-      const scoped = { ...data, [el.mi.inputItem]: items[i] };
+
+    for (let i = 0; i < total; i++) {
+      const scoped = collects ? { ...data, loopIndex: i } : data;
       const result = await this.executeBody(el, scoped);
-      const value = el.mi.outputItem ? scoped[el.mi.outputItem] : result;
-      if (value !== undefined) collected.push(value);
-      await this.services.onEvent({
-        type: 'progress', element: el, index: i + 1, total: items.length,
-      });
+      if (collects) collected.push(el.loop.outputItem ? scoped[el.loop.outputItem] : result);
+      await this.services.onEvent({ type: 'progress', element: el, index: i + 1, total });
     }
-    if (el.mi.outputRef) data[el.mi.outputRef] = collected;
+
+    if (collects) data[el.loop.outputRef] = collected;
   }
 
   async executeBody(el, data) {
-    switch (el.type) {
-      case 'serviceTask': {
-        const op = this.services.getOp(el.op.name);
-        const params = Object.fromEntries(
-          Object.entries(el.op.params).map(([k, expr]) => [k, evaluate(expr, data)]),
-        );
-        await this.services.onEvent({ type: 'call', element: el, op: el.op.name, params });
-        const result = await op.run(params, this.services);
-        if (el.op.resultVariable) data[el.op.resultVariable] = result;
-        await this.services.onEvent({ type: 'result', element: el, result });
-        return result;
-      }
-      case 'userTask': {
-        const value = await this.services.onUserTask(el, data);
-        if (el.form) data[el.form.field] = value;
-        return value;
-      }
-      case 'subProcess':
-        return this.runScope(el.scope, data);
-      default:
-        return undefined;
-    }
+    if (el.timer) return this.services.wait(el.timer);
+    if (el.scope) return this.runScope(el.scope, data);
+    if (!el.op) return undefined;
+
+    const params = Object.fromEntries(
+      Object.entries(el.op.params).map(([k, expr]) => [k, evaluate(expr, data)]),
+    );
+    const result = await this.services.call(el.op.name, params);
+    if (el.op.resultVariable) data[el.op.resultVariable] = result;
+    return result;
   }
 }
