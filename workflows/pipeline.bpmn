@@ -1,0 +1,436 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:spiff="http://spiffworkflow.org/bpmn/schema/1.0/core"
+                  xmlns:demo="https://github.com/teekuningas/bpmn-analysis-pipeline"
+                  id="Definitions_NatureNarratives"
+                  targetNamespace="https://github.com/teekuningas/bpmn-analysis-pipeline">
+
+  <bpmn:process id="Process_NatureNarratives" name="Nature narrative analysis" isExecutable="true">
+
+    <bpmn:startEvent id="StartEvent_1" name="Start">
+      <bpmn:outgoing>Flow_start_read</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="Task_ReadCorpus" name="Read corpus">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="corpus.read" resultVariable="corpus">
+          <spiff:parameters>
+            <spiff:parameter id="path" type="str" value="inputs.data_path"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_start_read</bpmn:incoming>
+      <bpmn:outgoing>Flow_read_fork</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:parallelGateway id="Gateway_Fork">
+      <bpmn:incoming>Flow_read_fork</bpmn:incoming>
+      <bpmn:outgoing>Flow_fork_filter</bpmn:outgoing>
+      <bpmn:outgoing>Flow_fork_context</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <!-- ============ branch A: narratives -> themes ============ -->
+
+    <bpmn:serviceTask id="Task_FilterCorpus" name="Filter corpus">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="corpus.filter" resultVariable="filtered">
+          <spiff:parameters>
+            <spiff:parameter id="corpus" type="any" value="corpus"/>
+            <spiff:parameter id="mode" type="str" value="inputs.filter_mode"/>
+            <spiff:parameter id="min_words" type="int" value="inputs.min_words"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_fork_filter</bpmn:incoming>
+      <bpmn:outgoing>Flow_filter_sub</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:subProcess id="SubProcess_Induce" name="Induce codes (per narrative)">
+      <bpmn:incoming>Flow_filter_sub</bpmn:incoming>
+      <bpmn:outgoing>Flow_sub_flatten</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="false">
+        <bpmn:loopDataInputRef>filtered.items</bpmn:loopDataInputRef>
+        <bpmn:inputDataItem name="rec_id"/>
+        <bpmn:loopDataOutputRef>codebooks</bpmn:loopDataOutputRef>
+        <bpmn:outputDataItem name="codes"/>
+      </bpmn:multiInstanceLoopCharacteristics>
+
+      <bpmn:startEvent id="Start_Induce">
+        <bpmn:outgoing>Flow_i1</bpmn:outgoing>
+      </bpmn:startEvent>
+
+      <bpmn:serviceTask id="Task_GenCodebook" name="Generate codebook">
+        <bpmn:extensionElements>
+          <spiff:serviceTaskOperator id="llm.generate_codebook" resultVariable="freeform">
+            <spiff:parameters>
+              <spiff:parameter id="corpus" type="any" value="filtered"/>
+              <spiff:parameter id="rec_id" type="str" value="rec_id"/>
+              <spiff:parameter id="seed" type="int" value="inputs.seed"/>
+            </spiff:parameters>
+          </spiff:serviceTaskOperator>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_i1</bpmn:incoming>
+        <bpmn:outgoing>Flow_i2</bpmn:outgoing>
+      </bpmn:serviceTask>
+
+      <bpmn:serviceTask id="Task_StructureCodes" name="Structure as JSON">
+        <bpmn:extensionElements>
+          <spiff:serviceTaskOperator id="llm.structure_codes" resultVariable="codes">
+            <spiff:parameters>
+              <spiff:parameter id="freeform" type="any" value="freeform"/>
+              <spiff:parameter id="rec_id" type="str" value="rec_id"/>
+            </spiff:parameters>
+          </spiff:serviceTaskOperator>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_i2</bpmn:incoming>
+        <bpmn:outgoing>Flow_i3</bpmn:outgoing>
+      </bpmn:serviceTask>
+
+      <bpmn:endEvent id="End_Induce">
+        <bpmn:incoming>Flow_i3</bpmn:incoming>
+      </bpmn:endEvent>
+
+      <bpmn:sequenceFlow id="Flow_i1" sourceRef="Start_Induce" targetRef="Task_GenCodebook"/>
+      <bpmn:sequenceFlow id="Flow_i2" sourceRef="Task_GenCodebook" targetRef="Task_StructureCodes"/>
+      <bpmn:sequenceFlow id="Flow_i3" sourceRef="Task_StructureCodes" targetRef="End_Induce"/>
+    </bpmn:subProcess>
+
+    <bpmn:serviceTask id="Task_FlattenCodes" name="Pool all codes">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="codes.flatten" resultVariable="pooled">
+          <spiff:parameters>
+            <spiff:parameter id="codebooks" type="any" value="codebooks"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_sub_flatten</bpmn:incoming>
+      <bpmn:outgoing>Flow_flatten_embed</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_Embed" name="Embed each code">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="llm.embed" resultVariable="vector">
+          <spiff:parameters>
+            <spiff:parameter id="codes" type="any" value="pooled"/>
+            <spiff:parameter id="index" type="int" value="code_index"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_flatten_embed</bpmn:incoming>
+      <bpmn:outgoing>Flow_embed_user</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="false">
+        <bpmn:loopDataInputRef>pooled.items</bpmn:loopDataInputRef>
+        <bpmn:inputDataItem name="code_index"/>
+        <bpmn:loopDataOutputRef>vectors</bpmn:loopDataOutputRef>
+        <bpmn:outputDataItem name="vector"/>
+      </bpmn:multiInstanceLoopCharacteristics>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="UserTask_Threshold" name="Choose clustering threshold">
+      <bpmn:extensionElements>
+        <demo:form field="threshold" type="number" min="0.02" max="0.60" step="0.01"
+                   label="Cut height for the code dendrogram"/>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_embed_user</bpmn:incoming>
+      <bpmn:outgoing>Flow_user_cluster</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Task_Cluster" name="Cluster codes">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="cluster.hierarchical" resultVariable="clusters">
+          <spiff:parameters>
+            <spiff:parameter id="codes" type="any" value="pooled"/>
+            <spiff:parameter id="vectors" type="any" value="vectors"/>
+            <spiff:parameter id="threshold" type="float" value="threshold"/>
+            <spiff:parameter id="min_size" type="int" value="inputs.min_cluster_size"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_user_cluster</bpmn:incoming>
+      <bpmn:outgoing>Flow_cluster_name</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_NameClusters" name="Name each cluster">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="llm.name_cluster" resultVariable="theme">
+          <spiff:parameters>
+            <spiff:parameter id="clusters" type="any" value="clusters"/>
+            <spiff:parameter id="index" type="int" value="cluster_index"/>
+            <spiff:parameter id="seed" type="int" value="inputs.seed"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_cluster_name</bpmn:incoming>
+      <bpmn:outgoing>Flow_name_score</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="false">
+        <bpmn:loopDataInputRef>clusters.items</bpmn:loopDataInputRef>
+        <bpmn:inputDataItem name="cluster_index"/>
+        <bpmn:loopDataOutputRef>codebook</bpmn:loopDataOutputRef>
+        <bpmn:outputDataItem name="theme"/>
+      </bpmn:multiInstanceLoopCharacteristics>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_ScorePresence" name="Score theme presence">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="matrix.score_presence" resultVariable="row">
+          <spiff:parameters>
+            <spiff:parameter id="corpus" type="any" value="filtered"/>
+            <spiff:parameter id="rec_id" type="str" value="rec_id"/>
+            <spiff:parameter id="codebook" type="any" value="codebook"/>
+            <spiff:parameter id="seed" type="int" value="inputs.seed"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_name_score</bpmn:incoming>
+      <bpmn:outgoing>Flow_score_prev</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="false">
+        <bpmn:loopDataInputRef>filtered.items</bpmn:loopDataInputRef>
+        <bpmn:inputDataItem name="rec_id"/>
+        <bpmn:loopDataOutputRef>rows</bpmn:loopDataOutputRef>
+        <bpmn:outputDataItem name="row"/>
+      </bpmn:multiInstanceLoopCharacteristics>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_Prevalence" name="Filter by prevalence">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="matrix.filter_prevalence" resultVariable="matrix">
+          <spiff:parameters>
+            <spiff:parameter id="rows" type="any" value="rows"/>
+            <spiff:parameter id="min" type="float" value="inputs.prevalence_min"/>
+            <spiff:parameter id="max" type="float" value="inputs.prevalence_max"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_score_prev</bpmn:incoming>
+      <bpmn:outgoing>Flow_prev_join</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- ============ branch B: ecological / spatial context ============ -->
+
+    <bpmn:serviceTask id="Task_LoadContext" name="Load site context">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="context.load" resultVariable="context">
+          <spiff:parameters>
+            <spiff:parameter id="path" type="str" value="inputs.data_path"/>
+            <spiff:parameter id="variable" type="str" value="inputs.context_variable"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_fork_context</bpmn:incoming>
+      <bpmn:outgoing>Flow_context_join</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- ============ merge and analyse ============ -->
+
+    <bpmn:parallelGateway id="Gateway_Join">
+      <bpmn:incoming>Flow_prev_join</bpmn:incoming>
+      <bpmn:incoming>Flow_context_join</bpmn:incoming>
+      <bpmn:outgoing>Flow_join_chi</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <bpmn:serviceTask id="Task_ChiSquare" name="Chi-square tests">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="stats.chi_square" resultVariable="tests">
+          <spiff:parameters>
+            <spiff:parameter id="matrix" type="any" value="matrix"/>
+            <spiff:parameter id="context" type="any" value="context"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_join_chi</bpmn:incoming>
+      <bpmn:outgoing>Flow_chi_fdr</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_FDR" name="FDR correction">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="stats.fdr" resultVariable="results">
+          <spiff:parameters>
+            <spiff:parameter id="results" type="any" value="tests"/>
+            <spiff:parameter id="alpha" type="float" value="inputs.alpha"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_chi_fdr</bpmn:incoming>
+      <bpmn:outgoing>Flow_fdr_report</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_Report" name="Render report">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="report.render" resultVariable="report">
+          <spiff:parameters>
+            <spiff:parameter id="results" type="any" value="results"/>
+            <spiff:parameter id="matrix" type="any" value="matrix"/>
+            <spiff:parameter id="top_n" type="int" value="inputs.top_n"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_fdr_report</bpmn:incoming>
+      <bpmn:outgoing>Flow_report_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_1" name="Results">
+      <bpmn:incoming>Flow_report_end</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_start_read" sourceRef="StartEvent_1" targetRef="Task_ReadCorpus"/>
+    <bpmn:sequenceFlow id="Flow_read_fork" sourceRef="Task_ReadCorpus" targetRef="Gateway_Fork"/>
+    <bpmn:sequenceFlow id="Flow_fork_filter" sourceRef="Gateway_Fork" targetRef="Task_FilterCorpus"/>
+    <bpmn:sequenceFlow id="Flow_fork_context" sourceRef="Gateway_Fork" targetRef="Task_LoadContext"/>
+    <bpmn:sequenceFlow id="Flow_filter_sub" sourceRef="Task_FilterCorpus" targetRef="SubProcess_Induce"/>
+    <bpmn:sequenceFlow id="Flow_sub_flatten" sourceRef="SubProcess_Induce" targetRef="Task_FlattenCodes"/>
+    <bpmn:sequenceFlow id="Flow_flatten_embed" sourceRef="Task_FlattenCodes" targetRef="Task_Embed"/>
+    <bpmn:sequenceFlow id="Flow_embed_user" sourceRef="Task_Embed" targetRef="UserTask_Threshold"/>
+    <bpmn:sequenceFlow id="Flow_user_cluster" sourceRef="UserTask_Threshold" targetRef="Task_Cluster"/>
+    <bpmn:sequenceFlow id="Flow_cluster_name" sourceRef="Task_Cluster" targetRef="Task_NameClusters"/>
+    <bpmn:sequenceFlow id="Flow_name_score" sourceRef="Task_NameClusters" targetRef="Task_ScorePresence"/>
+    <bpmn:sequenceFlow id="Flow_score_prev" sourceRef="Task_ScorePresence" targetRef="Task_Prevalence"/>
+    <bpmn:sequenceFlow id="Flow_prev_join" sourceRef="Task_Prevalence" targetRef="Gateway_Join"/>
+    <bpmn:sequenceFlow id="Flow_context_join" sourceRef="Task_LoadContext" targetRef="Gateway_Join"/>
+    <bpmn:sequenceFlow id="Flow_join_chi" sourceRef="Gateway_Join" targetRef="Task_ChiSquare"/>
+    <bpmn:sequenceFlow id="Flow_chi_fdr" sourceRef="Task_ChiSquare" targetRef="Task_FDR"/>
+    <bpmn:sequenceFlow id="Flow_fdr_report" sourceRef="Task_FDR" targetRef="Task_Report"/>
+    <bpmn:sequenceFlow id="Flow_report_end" sourceRef="Task_Report" targetRef="EndEvent_1"/>
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_NatureNarratives">
+
+      <bpmndi:BPMNShape id="Shape_StartEvent_1" bpmnElement="StartEvent_1">
+        <dc:Bounds x="152" y="182" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_ReadCorpus" bpmnElement="Task_ReadCorpus">
+        <dc:Bounds x="240" y="160" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_Fork" bpmnElement="Gateway_Fork">
+        <dc:Bounds x="400" y="175" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_FilterCorpus" bpmnElement="Task_FilterCorpus">
+        <dc:Bounds x="510" y="160" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_SubProcess_Induce" bpmnElement="SubProcess_Induce" isExpanded="true">
+        <dc:Bounds x="670" y="120" width="420" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Start_Induce" bpmnElement="Start_Induce">
+        <dc:Bounds x="700" y="182" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_GenCodebook" bpmnElement="Task_GenCodebook">
+        <dc:Bounds x="770" y="160" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_StructureCodes" bpmnElement="Task_StructureCodes">
+        <dc:Bounds x="900" y="160" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_Induce" bpmnElement="End_Induce">
+        <dc:Bounds x="1030" y="182" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Task_FlattenCodes" bpmnElement="Task_FlattenCodes">
+        <dc:Bounds x="1150" y="160" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Embed" bpmnElement="Task_Embed">
+        <dc:Bounds x="1150" y="360" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_UserTask_Threshold" bpmnElement="UserTask_Threshold">
+        <dc:Bounds x="990" y="360" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Cluster" bpmnElement="Task_Cluster">
+        <dc:Bounds x="830" y="360" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_NameClusters" bpmnElement="Task_NameClusters">
+        <dc:Bounds x="670" y="360" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_ScorePresence" bpmnElement="Task_ScorePresence">
+        <dc:Bounds x="510" y="360" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Prevalence" bpmnElement="Task_Prevalence">
+        <dc:Bounds x="200" y="560" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_LoadContext" bpmnElement="Task_LoadContext">
+        <dc:Bounds x="350" y="740" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_Join" bpmnElement="Gateway_Join">
+        <dc:Bounds x="510" y="575" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_ChiSquare" bpmnElement="Task_ChiSquare">
+        <dc:Bounds x="620" y="560" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_FDR" bpmnElement="Task_FDR">
+        <dc:Bounds x="780" y="560" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Report" bpmnElement="Task_Report">
+        <dc:Bounds x="940" y="560" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndEvent_1" bpmnElement="EndEvent_1">
+        <dc:Bounds x="1100" y="582" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Edge_Flow_start_read" bpmnElement="Flow_start_read">
+        <di:waypoint x="188" y="200"/><di:waypoint x="240" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_read_fork" bpmnElement="Flow_read_fork">
+        <di:waypoint x="340" y="200"/><di:waypoint x="400" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_fork_filter" bpmnElement="Flow_fork_filter">
+        <di:waypoint x="450" y="200"/><di:waypoint x="510" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_fork_context" bpmnElement="Flow_fork_context">
+        <di:waypoint x="425" y="225"/><di:waypoint x="425" y="740"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_filter_sub" bpmnElement="Flow_filter_sub">
+        <di:waypoint x="610" y="200"/><di:waypoint x="670" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_i1" bpmnElement="Flow_i1">
+        <di:waypoint x="736" y="200"/><di:waypoint x="770" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_i2" bpmnElement="Flow_i2">
+        <di:waypoint x="870" y="200"/><di:waypoint x="900" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_i3" bpmnElement="Flow_i3">
+        <di:waypoint x="1000" y="200"/><di:waypoint x="1030" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_sub_flatten" bpmnElement="Flow_sub_flatten">
+        <di:waypoint x="1090" y="200"/><di:waypoint x="1150" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_flatten_embed" bpmnElement="Flow_flatten_embed">
+        <di:waypoint x="1200" y="240"/><di:waypoint x="1200" y="360"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_embed_user" bpmnElement="Flow_embed_user">
+        <di:waypoint x="1150" y="400"/><di:waypoint x="1090" y="400"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_user_cluster" bpmnElement="Flow_user_cluster">
+        <di:waypoint x="990" y="400"/><di:waypoint x="930" y="400"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_cluster_name" bpmnElement="Flow_cluster_name">
+        <di:waypoint x="830" y="400"/><di:waypoint x="770" y="400"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_name_score" bpmnElement="Flow_name_score">
+        <di:waypoint x="670" y="400"/><di:waypoint x="610" y="400"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_score_prev" bpmnElement="Flow_score_prev">
+        <di:waypoint x="560" y="440"/><di:waypoint x="560" y="500"/>
+        <di:waypoint x="250" y="500"/><di:waypoint x="250" y="560"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_prev_join" bpmnElement="Flow_prev_join">
+        <di:waypoint x="300" y="600"/><di:waypoint x="510" y="600"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_context_join" bpmnElement="Flow_context_join">
+        <di:waypoint x="450" y="780"/><di:waypoint x="535" y="780"/><di:waypoint x="535" y="625"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_join_chi" bpmnElement="Flow_join_chi">
+        <di:waypoint x="560" y="600"/><di:waypoint x="620" y="600"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_chi_fdr" bpmnElement="Flow_chi_fdr">
+        <di:waypoint x="720" y="600"/><di:waypoint x="780" y="600"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_fdr_report" bpmnElement="Flow_fdr_report">
+        <di:waypoint x="880" y="600"/><di:waypoint x="940" y="600"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_report_end" bpmnElement="Flow_report_end">
+        <di:waypoint x="1040" y="600"/><di:waypoint x="1100" y="600"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

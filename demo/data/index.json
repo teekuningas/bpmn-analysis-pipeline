@@ -1,0 +1,17 @@
+{
+  "note": "Synthetic Finnish nature narratives written for this demo. No real interview data.",
+  "records": [
+    {"rec_id": "int01", "user_id": "u01", "site": "rural", "file": "int01.txt"},
+    {"rec_id": "int02", "user_id": "u02", "site": "rural", "file": "int02.txt"},
+    {"rec_id": "int03", "user_id": "u03", "site": "rural", "file": "int03.txt"},
+    {"rec_id": "int04", "user_id": "u04", "site": "rural", "file": "int04.txt"},
+    {"rec_id": "int05", "user_id": "u05", "site": "rural", "file": "int05.txt"},
+    {"rec_id": "int06", "user_id": "u02", "site": "rural", "file": "int06.txt"},
+    {"rec_id": "int07", "user_id": "u06", "site": "urban", "file": "int07.txt"},
+    {"rec_id": "int08", "user_id": "u07", "site": "urban", "file": "int08.txt"},
+    {"rec_id": "int09", "user_id": "u08", "site": "urban", "file": "int09.txt"},
+    {"rec_id": "int10", "user_id": "u09", "site": "urban", "file": "int10.txt"},
+    {"rec_id": "int11", "user_id": "u10", "site": "urban", "file": "int11.txt"},
+    {"rec_id": "int12", "user_id": "u07", "site": "urban", "file": "int12.txt"}
+  ]
+}

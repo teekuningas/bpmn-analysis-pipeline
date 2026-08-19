@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Analysis pipeline as BPMN</title>
+<link rel="stylesheet" href="vendor/assets/diagram-js.css"/>
+<link rel="stylesheet" href="vendor/assets/bpmn-js.css"/>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --line: #e2e2df;
+    --accent: #7c6bad;
+    --active: #e08a2e;
+    --done: #599e6a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  header a { color: var(--accent); }
+
+  main { display: flex; height: calc(100vh - 56px); align-items: stretch; }
+  #canvas { flex: 1 1 auto; background: var(--panel); min-width: 0; }
+  aside {
+    width: 400px; flex: 0 0 400px; border-left: 1px solid var(--line);
+    background: var(--panel); overflow-y: auto; padding: 16px;
+  }
+  @media (max-width: 900px) {
+    main { flex-direction: column; height: auto; }
+    #canvas { height: 55vh; }
+    aside { width: auto; flex: none; border-left: none; border-top: 1px solid var(--line); }
+  }
+
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--muted); margin: 20px 0 8px; font-weight: 600; }
+  h2:first-child { margin-top: 0; }
+
+  label { display: block; font-size: 13px; margin-bottom: 8px; }
+  label span { display: block; color: var(--muted); font-size: 12px; }
+  select, input[type=number] {
+    width: 100%; padding: 5px 7px; border: 1px solid var(--line); border-radius: 5px;
+    font: inherit; font-size: 13px; background: #fff; color: inherit;
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  button {
+    font: inherit; font-size: 14px; padding: 8px 16px; border-radius: 6px;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button.secondary { background: #fff; color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+
+  #log {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+    background: #fafaf8; border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px; height: 170px; overflow-y: auto; white-space: pre-wrap;
+  }
+  #inspector { font-size: 13px; }
+  .op { font-family: ui-monospace, monospace; color: var(--accent); font-size: 12px; }
+  #inspector pre {
+    font-family: ui-monospace, monospace; font-size: 11.5px; background: #fafaf8;
+    border: 1px solid var(--line); border-radius: 6px; padding: 8px;
+    overflow-x: auto; max-height: 220px; margin: 6px 0 0;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.sig td { background: rgba(89,158,106,.12); }
+
+  .question {
+    border: 1px solid var(--active); border-radius: 8px; padding: 12px;
+    background: #fff8ee; margin-bottom: 8px;
+  }
+  .question h3 { margin: 0 0 4px; font-size: 14px; }
+  .question p { margin: 0 0 10px; color: var(--muted); font-size: 12.5px; }
+  .hint { color: var(--muted); font-size: 12px; }
+
+  /* token highlighting on the diagram */
+  .djs-element.pipeline-active .djs-visual > :nth-child(1) {
+    stroke: var(--active) !important; stroke-width: 3px !important; fill: #fdf3e3 !important;
+  }
+  .djs-element.pipeline-done .djs-visual > :nth-child(1) {
+    stroke: var(--done) !important;
+  }
+  .djs-element.pipeline-waiting .djs-visual > :nth-child(1) {
+    stroke: var(--active) !important; stroke-width: 3px !important; fill: #fff2d8 !important;
+  }
+  .mi-badge {
+    background: var(--active); color: #fff; border-radius: 9px; padding: 1px 7px;
+    font-size: 11px; font-family: ui-monospace, monospace; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Analysis pipeline as BPMN</h1>
+  <p>The diagram is the program. Every box calls a named task from the registry &mdash;
+     nothing is wired by copying paths between scripts.
+     <a href="https://github.com/teekuningas/bpmn-analysis-pipeline">source</a></p>
+</header>
+
+<main>
+  <div id="canvas"></div>
+  <aside>
+    <div id="question-slot"></div>
+
+    <h2>Inputs</h2>
+    <label>Which narratives
+      <select id="in-filter-mode">
+        <option value="all_valid">all valid narratives</option>
+        <option value="first_per_user">one per participant</option>
+      </select>
+      <span>an analysis choice as a parameter, instead of a code edit</span>
+    </label>
+    <div class="row">
+      <label>Model seed <input type="number" id="in-seed" value="1" min="0" max="99"/></label>
+      <label>Min cluster size <input type="number" id="in-min-cluster" value="2" min="1" max="10"/></label>
+    </div>
+    <div class="row">
+      <label>Prevalence min <input type="number" id="in-prev-min" value="0.15" step="0.05" min="0" max="1"/></label>
+      <label>Prevalence max <input type="number" id="in-prev-max" value="0.9" step="0.05" min="0" max="1"/></label>
+    </div>
+    <div class="row">
+      <label>FDR alpha <input type="number" id="in-alpha" value="0.1" step="0.05" min="0.01" max="1"/></label>
+      <label>Step delay (ms) <input type="number" id="in-delay" value="120" step="20" min="0" max="1000"/></label>
+    </div>
+
+    <p style="margin:14px 0 0">
+      <button id="run">Run pipeline</button>
+      <button id="reset" class="secondary">Reset</button>
+    </p>
+
+    <h2>Event log</h2>
+    <div id="log"></div>
+
+    <h2>Inspector</h2>
+    <div id="inspector" class="hint">Click any task in the diagram to see the op it calls,
+      the parameters it received and what it produced.</div>
+
+    <h2>Results</h2>
+    <div id="results" class="hint">Run the pipeline to get results.</div>
+
+    <h2>Task registry</h2>
+    <p class="hint" style="margin-top:0">Everything the diagram is allowed to call.
+      Implementations live in <code>app/ops.js</code>; the BPMN file references only these names.</p>
+    <div id="registry"></div>
+  </aside>
+</main>
+
+<script src="vendor/bpmn-navigated-viewer.js"></script>
+<script type="module" src="app/ui.js"></script>
+</body>
+</html>
