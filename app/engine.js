@@ -184,7 +184,7 @@ export class Engine {
     const params = Object.fromEntries(
       Object.entries(el.op.params).map(([k, expr]) => [k, evaluate(expr, data)]),
     );
-    const result = await this.services.call(el.op.name, params);
+    const result = await this.services.call(el.op.name, params, el);
     if (el.op.resultVariable) data[el.op.resultVariable] = result;
     return result;
   }

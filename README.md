@@ -2,7 +2,9 @@
 
 An analysis pipeline — documents in, findings out — drawn as a BPMN process
 built from ten primitives. Everything else is arrangement: a multi-instance
-marker is `map`, a gateway is `filter`, a collecting loop is `fold`.
+marker is `map`, a fork and join runs independent branches, a loop marker
+repeats until settled. `filter` and `fold` are not structure here but
+primitives — Select and Combine.
 
 [**Live demo**](https://teekuningas.github.io/bpmn-analysis-pipeline/)
 

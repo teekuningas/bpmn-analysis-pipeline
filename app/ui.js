@@ -33,10 +33,7 @@ async function loadDiagram() {
   const bus = viewer.get('eventBus');
   bus.on('element.hover', ({ element }) => {
     const el = running ? null : find(element.id);
-    if (el?.op) {
-      const primitive = getPrimitive(el.op.name);
-      caption(primitive.label, primitive.signature, settings(el.op.params, true));
-    }
+    if (el) describe(el);
   });
   bus.on('element.out', () => { if (!running) caption(); });
 }
@@ -60,11 +57,31 @@ function find(id) {
 // What the modeller fills in, as opposed to what flows in from another task.
 const SETTINGS = ['prompt', 'question', 'source', 'where', 'test', 'metric', 'by', 'how', 'on', 'model'];
 
-function caption(label = '', signature = '', setting = '') {
+function caption(label = '', signature = '', setting = '', loop = '') {
   $('caption').innerHTML = label
     ? `<span class="label">${label}</span><span class="sig">${signature}</span>`
+      + (loop ? `<span class="loop">${loop}</span>` : '')
       + (setting ? `<div class="setting">${setting}</div>` : '')
     : '';
+}
+
+/** What the loop around a task does to its type: one item in, a collection out. */
+function loopOf(el) {
+  if (!el.loop) return '';
+  const { cardinality, outputRef } = el.loop;
+  const times = /^\d+$/.test(cardinality);
+  const over = times ? `${cardinality} times` : cardinality.replace(/\.(count|length)$/, '');
+  if (!outputRef) return `repeats ${over}`;
+  return times ? `${over} → ${outputRef}` : `each ${over} → ${outputRef}`;
+}
+
+function describe(el) {
+  if (el.op) {
+    const primitive = getPrimitive(el.op.name);
+    caption(primitive.label, primitive.signature, settings(el.op.params, true), loopOf(el));
+  } else if (el.loop) {
+    caption(el.name, '', '', loopOf(el));
+  }
 }
 
 function settings(params, quoted = false) {
@@ -121,8 +138,8 @@ async function run() {
 
   const services = {
     wait: sleep,
-    call: async (name, params) => {
-      show(name, params);
+    call: async (name, params, el) => {
+      caption(getPrimitive(name).label, getPrimitive(name).signature, settings(params), loopOf(el));
       await sleep(jitter(getPrimitive(name).ms));
       if (params.fails > Math.random()) throw new Error('unavailable');
       const parts = params.parts?.flat(Infinity).map(size);
@@ -134,6 +151,7 @@ async function run() {
     onEvent: async ({ type, element, index, total }) => {
       if (type === 'enter') {
         mark(element.id, element.scope ? 'is-running' : 'is-active');
+        if (!element.op && element.loop) describe(element);
         await sleep(20);
       } else if (type === 'exit') {
         unmark(element.id, 'is-active');

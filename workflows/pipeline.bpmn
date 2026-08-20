@@ -18,6 +18,12 @@
       <bpmn:outgoing>f1</bpmn:outgoing>
     </bpmn:startEvent>
 
+    <bpmn:parallelGateway id="Fork">
+      <bpmn:incoming>f1</bpmn:incoming>
+      <bpmn:outgoing>f2</bpmn:outgoing>
+      <bpmn:outgoing>f_ctx</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
     <bpmn:serviceTask id="ReadDocuments" name="Read">
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="read" resultVariable="documents">
@@ -27,15 +33,9 @@
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
-      <bpmn:incoming>f1</bpmn:incoming>
-      <bpmn:outgoing>f2</bpmn:outgoing>
-    </bpmn:serviceTask>
-
-    <bpmn:parallelGateway id="Fork">
       <bpmn:incoming>f2</bpmn:incoming>
       <bpmn:outgoing>f3</bpmn:outgoing>
-      <bpmn:outgoing>f_ctx</bpmn:outgoing>
-    </bpmn:parallelGateway>
+    </bpmn:serviceTask>
 
     <bpmn:subProcess id="PerDocument" name="For each account">
       <bpmn:incoming>f3</bpmn:incoming>
@@ -360,9 +360,9 @@
 
     <bpmn:endEvent id="End"><bpmn:incoming>f13</bpmn:incoming></bpmn:endEvent>
 
-    <bpmn:sequenceFlow id="f1" sourceRef="Start" targetRef="ReadDocuments"/>
-    <bpmn:sequenceFlow id="f2" sourceRef="ReadDocuments" targetRef="Fork"/>
-    <bpmn:sequenceFlow id="f3" sourceRef="Fork" targetRef="PerDocument"/>
+    <bpmn:sequenceFlow id="f1" sourceRef="Start" targetRef="Fork"/>
+    <bpmn:sequenceFlow id="f2" sourceRef="Fork" targetRef="ReadDocuments"/>
+    <bpmn:sequenceFlow id="f3" sourceRef="ReadDocuments" targetRef="PerDocument"/>
     <bpmn:sequenceFlow id="f_ctx" sourceRef="Fork" targetRef="ReadContext"/>
     <bpmn:sequenceFlow id="f4" sourceRef="PerDocument" targetRef="Pool"/>
     <bpmn:sequenceFlow id="f5" sourceRef="Pool" targetRef="EmbedEach"/>
@@ -399,10 +399,10 @@
         <dc:Bounds x="140" y="232" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_ReadDocuments" bpmnElement="ReadDocuments">
-        <dc:Bounds x="210" y="210" width="110" height="80"/>
+        <dc:Bounds x="280" y="210" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Fork" bpmnElement="Fork">
-        <dc:Bounds x="370" y="225" width="50" height="50"/>
+        <dc:Bounds x="200" y="225" width="50" height="50"/>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="s_PerDocument" bpmnElement="PerDocument" isExpanded="true">
@@ -465,7 +465,7 @@
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="s_ReadContext" bpmnElement="ReadContext">
-        <dc:Bounds x="240" y="720" width="110" height="80"/>
+        <dc:Bounds x="280" y="720" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Merge" bpmnElement="Merge">
         <dc:Bounds x="570" y="735" width="50" height="50"/>
@@ -524,18 +524,17 @@
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNEdge id="e_f1" bpmnElement="f1">
-        <di:waypoint x="176" y="250"/><di:waypoint x="210" y="250"/>
+        <di:waypoint x="176" y="250"/><di:waypoint x="200" y="250"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f2" bpmnElement="f2">
-        <di:waypoint x="320" y="250"/><di:waypoint x="370" y="250"/>
+        <di:waypoint x="250" y="250"/><di:waypoint x="280" y="250"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f3" bpmnElement="f3">
-        <di:waypoint x="420" y="250"/><di:waypoint x="450" y="250"/>
+        <di:waypoint x="390" y="250"/><di:waypoint x="450" y="250"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f_ctx" bpmnElement="f_ctx">
-        <di:waypoint x="395" y="275"/><di:waypoint x="395" y="340"/>
-        <di:waypoint x="190" y="340"/><di:waypoint x="190" y="760"/>
-        <di:waypoint x="240" y="760"/>
+        <di:waypoint x="225" y="275"/><di:waypoint x="225" y="760"/>
+        <di:waypoint x="280" y="760"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_d1" bpmnElement="d1">
         <di:waypoint x="516" y="250"/><di:waypoint x="545" y="250"/>
@@ -587,7 +586,7 @@
         <di:waypoint x="595" y="640"/><di:waypoint x="595" y="735"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f_ctx2" bpmnElement="f_ctx2">
-        <di:waypoint x="350" y="760"/><di:waypoint x="570" y="760"/>
+        <di:waypoint x="390" y="760"/><di:waypoint x="570" y="760"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f10" bpmnElement="f10">
         <di:waypoint x="595" y="785"/><di:waypoint x="595" y="880"/>
