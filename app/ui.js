@@ -1,5 +1,6 @@
 import { parseBpmn, Engine } from './engine.js';
 import { PRIMITIVES, getPrimitive } from './primitives.js';
+import { check } from './types.js';
 
 const BPMN_URL = 'workflows/pipeline.bpmn';
 const PROCESS_ID = 'Process_Pipeline';
@@ -57,7 +58,7 @@ function find(id) {
 }
 
 // What the modeller fills in, as opposed to what flows in from another task.
-const SETTINGS = ['prompt', 'shape', 'question', 'source', 'where', 'test', 'metric', 'by', 'how', 'on', 'model'];
+const SETTINGS = ['prompt', 'question', 'source', 'where', 'test', 'metric', 'by', 'how', 'on', 'model'];
 
 function caption(label = '', signature = '', setting = '') {
   $('caption').innerHTML = label
@@ -133,7 +134,7 @@ async function run() {
     onEvent: async ({ type, element, index, total }) => {
       if (type === 'enter') {
         mark(element.id, element.scope ? 'is-running' : 'is-active');
-        await sleep(35);
+        await sleep(20);
       } else if (type === 'exit') {
         unmark(element.id, 'is-active');
         unmark(element.id, 'is-running');
@@ -173,4 +174,10 @@ function renderLegend() {
 
 await loadDiagram();
 renderLegend();
+
+const problems = check(processes);
+if (problems.length) {
+  $('caption').innerHTML = problems.map((p) => `<div class="problem">${p}</div>`).join('');
+  $('run').disabled = true;
+}
 $('run').onclick = () => run();
