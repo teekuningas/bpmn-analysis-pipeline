@@ -9,9 +9,8 @@
 
   <bpmn:process id="Process_Pipeline" name="Themes and context" isExecutable="true">
 
-    <bpmn:property id="drafts" name="drafts"/>
-    <bpmn:property id="vectors" name="vectors"/>
-    <bpmn:property id="labels" name="labels"/>
+    <bpmn:property id="all_readings" name="all_readings"/>
+    <bpmn:property id="themes" name="themes"/>
     <bpmn:property id="rows" name="rows"/>
 
     <bpmn:startEvent id="Start">
@@ -21,13 +20,14 @@
     <bpmn:parallelGateway id="Fork">
       <bpmn:incoming>f1</bpmn:incoming>
       <bpmn:outgoing>f2</bpmn:outgoing>
-      <bpmn:outgoing>f_ctx</bpmn:outgoing>
+      <bpmn:outgoing>f7</bpmn:outgoing>
     </bpmn:parallelGateway>
 
-    <bpmn:serviceTask id="ReadDocuments" name="Read">
+    <bpmn:serviceTask id="ReadAccounts" name="Read">
       <bpmn:extensionElements>
-        <spiff:serviceTaskOperator id="read" resultVariable="documents">
+        <spiff:serviceTaskOperator id="read" resultVariable="accounts">
           <spiff:parameters>
+            <spiff:parameter id="gives" value="&apos;collection[account]&apos;"/>
             <spiff:parameter id="source" value="&apos;interview accounts&apos;"/>
             <spiff:parameter id="count" value="4"/>
           </spiff:parameters>
@@ -37,25 +37,25 @@
       <bpmn:outgoing>f3</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <bpmn:subProcess id="PerDocument" name="For each account">
+    <bpmn:subProcess id="PerAccount" name="For each account">
       <bpmn:incoming>f3</bpmn:incoming>
       <bpmn:outgoing>f4</bpmn:outgoing>
-      <bpmn:property id="passes" name="passes"/>
+      <bpmn:property id="readings" name="readings"/>
       <bpmn:multiInstanceLoopCharacteristics isSequential="true">
-        <bpmn:loopCardinality>documents.count</bpmn:loopCardinality>
-        <bpmn:loopDataOutputRef>drafts</bpmn:loopDataOutputRef>
-        <bpmn:outputDataItem name="passes"/>
+        <bpmn:loopCardinality>count(accounts)</bpmn:loopCardinality>
+        <bpmn:loopDataOutputRef>all_readings</bpmn:loopDataOutputRef>
+        <bpmn:outputDataItem name="readings"/>
       </bpmn:multiInstanceLoopCharacteristics>
 
-      <bpmn:startEvent id="StartDocument"><bpmn:outgoing>d1</bpmn:outgoing></bpmn:startEvent>
+      <bpmn:startEvent id="StartAccount"><bpmn:outgoing>d1</bpmn:outgoing></bpmn:startEvent>
 
       <bpmn:subProcess id="PerPass" name="For each pass">
         <bpmn:incoming>d1</bpmn:incoming>
         <bpmn:outgoing>d2</bpmn:outgoing>
         <bpmn:multiInstanceLoopCharacteristics isSequential="true">
           <bpmn:loopCardinality>2</bpmn:loopCardinality>
-          <bpmn:loopDataOutputRef>passes</bpmn:loopDataOutputRef>
-          <bpmn:outputDataItem name="records"/>
+          <bpmn:loopDataOutputRef>readings</bpmn:loopDataOutputRef>
+          <bpmn:outputDataItem name="codebook"/>
         </bpmn:multiInstanceLoopCharacteristics>
 
         <bpmn:startEvent id="StartPass"><bpmn:outgoing>p1</bpmn:outgoing></bpmn:startEvent>
@@ -64,8 +64,9 @@
           <bpmn:extensionElements>
             <spiff:serviceTaskOperator id="generate" resultVariable="draft">
               <spiff:parameters>
+                <spiff:parameter id="of" value="accounts"/>
+                <spiff:parameter id="gives" value="&apos;draft&apos;"/>
                 <spiff:parameter id="prompt" value="&apos;Read this account and name the themes in it&apos;"/>
-                <spiff:parameter id="of" value="documents"/>
                 <spiff:parameter id="fails" value="0.15"/>
               </spiff:parameters>
             </spiff:serviceTaskOperator>
@@ -90,10 +91,11 @@
 
         <bpmn:serviceTask id="Structure" name="Generate">
           <bpmn:extensionElements>
-            <spiff:serviceTaskOperator id="generate" resultVariable="records">
+            <spiff:serviceTaskOperator id="generate" resultVariable="codebook">
               <spiff:parameters>
-                <spiff:parameter id="prompt" value="&apos;Write each theme you named as one short label&apos;"/>
                 <spiff:parameter id="of" value="draft"/>
+                <spiff:parameter id="gives" value="&apos;collection[theme]&apos;"/>
+                <spiff:parameter id="prompt" value="&apos;Write each theme you named as one short label&apos;"/>
                 <spiff:parameter id="count" value="3"/>
               </spiff:parameters>
             </spiff:serviceTaskOperator>
@@ -111,18 +113,19 @@
         <bpmn:sequenceFlow id="p3" sourceRef="Structure" targetRef="EndPass"/>
       </bpmn:subProcess>
 
-      <bpmn:endEvent id="EndDocument"><bpmn:incoming>d2</bpmn:incoming></bpmn:endEvent>
+      <bpmn:endEvent id="EndAccount"><bpmn:incoming>d2</bpmn:incoming></bpmn:endEvent>
 
-      <bpmn:sequenceFlow id="d1" sourceRef="StartDocument" targetRef="PerPass"/>
-      <bpmn:sequenceFlow id="d2" sourceRef="PerPass" targetRef="EndDocument"/>
+      <bpmn:sequenceFlow id="d1" sourceRef="StartAccount" targetRef="PerPass"/>
+      <bpmn:sequenceFlow id="d2" sourceRef="PerPass" targetRef="EndAccount"/>
     </bpmn:subProcess>
 
     <bpmn:serviceTask id="Pool" name="Combine">
       <bpmn:extensionElements>
-        <spiff:serviceTaskOperator id="combine" resultVariable="pooled">
+        <spiff:serviceTaskOperator id="combine" resultVariable="themes">
           <spiff:parameters>
-            <spiff:parameter id="how" value="&apos;every label from every pass&apos;"/>
-            <spiff:parameter id="parts" value="drafts"/>
+            <spiff:parameter id="parts" value="all_readings"/>
+            <spiff:parameter id="gives" value="&apos;collection[theme]&apos;"/>
+            <spiff:parameter id="how" value="&apos;every theme from every reading of every account&apos;"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -130,65 +133,40 @@
       <bpmn:outgoing>f5</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <bpmn:serviceTask id="EmbedEach" name="Embed">
-      <bpmn:extensionElements>
-        <spiff:serviceTaskOperator id="embed" resultVariable="vector">
-          <spiff:parameters>
-            <spiff:parameter id="model" value="&apos;multilingual sentences&apos;"/>
-            <spiff:parameter id="of" value="pooled"/>
-          </spiff:parameters>
-        </spiff:serviceTaskOperator>
-      </bpmn:extensionElements>
+    <bpmn:subProcess id="Refine" name="Refine the vocabulary">
       <bpmn:incoming>f5</bpmn:incoming>
       <bpmn:outgoing>f6</bpmn:outgoing>
-      <bpmn:multiInstanceLoopCharacteristics isSequential="true">
-        <bpmn:loopCardinality>pooled.count</bpmn:loopCardinality>
-        <bpmn:loopDataOutputRef>vectors</bpmn:loopDataOutputRef>
-        <bpmn:outputDataItem name="vector"/>
-      </bpmn:multiInstanceLoopCharacteristics>
-    </bpmn:serviceTask>
-
-    <bpmn:subProcess id="Refine" name="Refine">
-      <bpmn:incoming>f6</bpmn:incoming>
-      <bpmn:outgoing>f7</bpmn:outgoing>
+      <bpmn:property id="vectors" name="vectors"/>
       <bpmn:standardLoopCharacteristics loopMaximum="2"/>
 
-      <bpmn:startEvent id="StartRefine"><bpmn:outgoing>r0</bpmn:outgoing></bpmn:startEvent>
+      <bpmn:startEvent id="StartRefine"><bpmn:outgoing>r1</bpmn:outgoing></bpmn:startEvent>
 
-      <bpmn:serviceTask id="Similarity" name="Compare">
+      <bpmn:serviceTask id="EmbedEach" name="Embed">
         <bpmn:extensionElements>
-          <spiff:serviceTaskOperator id="compare" resultVariable="similarity">
+          <spiff:serviceTaskOperator id="embed" resultVariable="vector">
             <spiff:parameters>
-              <spiff:parameter id="metric" value="&apos;cosine distance&apos;"/>
-              <spiff:parameter id="of" value="vectors"/>
-            </spiff:parameters>
-          </spiff:serviceTaskOperator>
-        </bpmn:extensionElements>
-        <bpmn:incoming>r0</bpmn:incoming>
-        <bpmn:outgoing>r1</bpmn:outgoing>
-      </bpmn:serviceTask>
-
-      <bpmn:userTask id="Threshold" name="Decide">
-        <bpmn:extensionElements>
-          <spiff:serviceTaskOperator id="decide" resultVariable="threshold">
-            <spiff:parameters>
-              <spiff:parameter id="question" value="&apos;How similar counts as the same?&apos;"/>
-              <spiff:parameter id="of" value="similarity"/>
+              <spiff:parameter id="of" value="themes"/>
+              <spiff:parameter id="gives" value="&apos;pair[theme, vector]&apos;"/>
+              <spiff:parameter id="model" value="&apos;multilingual sentences&apos;"/>
             </spiff:parameters>
           </spiff:serviceTaskOperator>
         </bpmn:extensionElements>
         <bpmn:incoming>r1</bpmn:incoming>
         <bpmn:outgoing>r2</bpmn:outgoing>
-      </bpmn:userTask>
+        <bpmn:multiInstanceLoopCharacteristics isSequential="true">
+          <bpmn:loopCardinality>count(themes)</bpmn:loopCardinality>
+          <bpmn:loopDataOutputRef>vectors</bpmn:loopDataOutputRef>
+          <bpmn:outputDataItem name="vector"/>
+        </bpmn:multiInstanceLoopCharacteristics>
+      </bpmn:serviceTask>
 
-      <bpmn:serviceTask id="Cluster" name="Group">
+      <bpmn:serviceTask id="Similarity" name="Compare">
         <bpmn:extensionElements>
-          <spiff:serviceTaskOperator id="group" resultVariable="groups">
+          <spiff:serviceTaskOperator id="compare" resultVariable="similarity">
             <spiff:parameters>
-              <spiff:parameter id="by" value="&apos;distance below the threshold&apos;"/>
-              <spiff:parameter id="of" value="similarity"/>
-              <spiff:parameter id="threshold" value="threshold"/>
-              <spiff:parameter id="count" value="4"/>
+              <spiff:parameter id="of" value="vectors"/>
+              <spiff:parameter id="gives" value="&apos;matrix[theme]&apos;"/>
+              <spiff:parameter id="metric" value="&apos;cosine distance&apos;"/>
             </spiff:parameters>
           </spiff:serviceTaskOperator>
         </bpmn:extensionElements>
@@ -196,71 +174,106 @@
         <bpmn:outgoing>r3</bpmn:outgoing>
       </bpmn:serviceTask>
 
-      <bpmn:endEvent id="EndRefine"><bpmn:incoming>r3</bpmn:incoming></bpmn:endEvent>
+      <bpmn:userTask id="Threshold" name="Decide">
+        <bpmn:extensionElements>
+          <spiff:serviceTaskOperator id="decide" resultVariable="threshold">
+            <spiff:parameters>
+              <spiff:parameter id="of" value="similarity"/>
+              <spiff:parameter id="gives" value="&apos;number&apos;"/>
+              <spiff:parameter id="question" value="&apos;How similar counts as the same?&apos;"/>
+            </spiff:parameters>
+          </spiff:serviceTaskOperator>
+        </bpmn:extensionElements>
+        <bpmn:incoming>r3</bpmn:incoming>
+        <bpmn:outgoing>r4</bpmn:outgoing>
+      </bpmn:userTask>
 
-      <bpmn:sequenceFlow id="r0" sourceRef="StartRefine" targetRef="Similarity"/>
-      <bpmn:sequenceFlow id="r1" sourceRef="Similarity" targetRef="Threshold"/>
-      <bpmn:sequenceFlow id="r2" sourceRef="Threshold" targetRef="Cluster"/>
-      <bpmn:sequenceFlow id="r3" sourceRef="Cluster" targetRef="EndRefine"/>
+      <bpmn:serviceTask id="Cluster" name="Group">
+        <bpmn:extensionElements>
+          <spiff:serviceTaskOperator id="group" resultVariable="groups">
+            <spiff:parameters>
+              <spiff:parameter id="of" value="similarity"/>
+              <spiff:parameter id="threshold" value="threshold"/>
+              <spiff:parameter id="gives" value="&apos;collection[collection[theme]]&apos;"/>
+              <spiff:parameter id="by" value="&apos;distance below the threshold&apos;"/>
+              <spiff:parameter id="count" value="4"/>
+            </spiff:parameters>
+          </spiff:serviceTaskOperator>
+        </bpmn:extensionElements>
+        <bpmn:incoming>r4</bpmn:incoming>
+        <bpmn:outgoing>r5</bpmn:outgoing>
+      </bpmn:serviceTask>
+
+      <bpmn:serviceTask id="NameGroups" name="Generate">
+        <bpmn:extensionElements>
+          <spiff:serviceTaskOperator id="generate" resultVariable="theme">
+            <spiff:parameters>
+              <spiff:parameter id="of" value="groups"/>
+              <spiff:parameter id="gives" value="&apos;theme&apos;"/>
+              <spiff:parameter id="prompt" value="&apos;Give this group of themes one shared name&apos;"/>
+            </spiff:parameters>
+          </spiff:serviceTaskOperator>
+        </bpmn:extensionElements>
+        <bpmn:incoming>r5</bpmn:incoming>
+        <bpmn:outgoing>r6</bpmn:outgoing>
+        <bpmn:multiInstanceLoopCharacteristics isSequential="true">
+          <bpmn:loopCardinality>count(groups)</bpmn:loopCardinality>
+          <bpmn:loopDataOutputRef>themes</bpmn:loopDataOutputRef>
+          <bpmn:outputDataItem name="theme"/>
+        </bpmn:multiInstanceLoopCharacteristics>
+      </bpmn:serviceTask>
+
+      <bpmn:endEvent id="EndRefine"><bpmn:incoming>r6</bpmn:incoming></bpmn:endEvent>
+
+      <bpmn:sequenceFlow id="r1" sourceRef="StartRefine" targetRef="EmbedEach"/>
+      <bpmn:sequenceFlow id="r2" sourceRef="EmbedEach" targetRef="Similarity"/>
+      <bpmn:sequenceFlow id="r3" sourceRef="Similarity" targetRef="Threshold"/>
+      <bpmn:sequenceFlow id="r4" sourceRef="Threshold" targetRef="Cluster"/>
+      <bpmn:sequenceFlow id="r5" sourceRef="Cluster" targetRef="NameGroups"/>
+      <bpmn:sequenceFlow id="r6" sourceRef="NameGroups" targetRef="EndRefine"/>
     </bpmn:subProcess>
-
-    <bpmn:serviceTask id="NameGroups" name="Generate">
-      <bpmn:extensionElements>
-        <spiff:serviceTaskOperator id="generate" resultVariable="label">
-          <spiff:parameters>
-            <spiff:parameter id="prompt" value="&apos;Give this group of labels one shared name&apos;"/>
-            <spiff:parameter id="of" value="groups"/>
-          </spiff:parameters>
-        </spiff:serviceTaskOperator>
-      </bpmn:extensionElements>
-      <bpmn:incoming>f7</bpmn:incoming>
-      <bpmn:outgoing>f8</bpmn:outgoing>
-      <bpmn:multiInstanceLoopCharacteristics isSequential="true">
-        <bpmn:loopCardinality>groups.count</bpmn:loopCardinality>
-        <bpmn:loopDataOutputRef>labels</bpmn:loopDataOutputRef>
-        <bpmn:outputDataItem name="label"/>
-      </bpmn:multiInstanceLoopCharacteristics>
-    </bpmn:serviceTask>
 
     <bpmn:serviceTask id="ReadContext" name="Read">
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="read" resultVariable="context">
           <spiff:parameters>
+            <spiff:parameter id="gives" value="&apos;collection[site]&apos;"/>
             <spiff:parameter id="source" value="&apos;land cover at each site&apos;"/>
             <spiff:parameter id="count" value="4"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
-      <bpmn:incoming>f_ctx</bpmn:incoming>
-      <bpmn:outgoing>f_ctx2</bpmn:outgoing>
+      <bpmn:incoming>f7</bpmn:incoming>
+      <bpmn:outgoing>f8</bpmn:outgoing>
     </bpmn:serviceTask>
 
     <bpmn:parallelGateway id="Merge">
+      <bpmn:incoming>f6</bpmn:incoming>
       <bpmn:incoming>f8</bpmn:incoming>
-      <bpmn:incoming>f_ctx2</bpmn:incoming>
-      <bpmn:outgoing>f10</bpmn:outgoing>
+      <bpmn:outgoing>f9</bpmn:outgoing>
     </bpmn:parallelGateway>
 
     <bpmn:serviceTask id="Subset" name="Select">
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="select" resultVariable="subset">
           <spiff:parameters>
+            <spiff:parameter id="of" value="accounts"/>
+            <spiff:parameter id="gives" value="&apos;collection[account]&apos;"/>
             <spiff:parameter id="where" value="&apos;one account per participant&apos;"/>
-            <spiff:parameter id="of" value="documents"/>
             <spiff:parameter id="count" value="3"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
-      <bpmn:incoming>f10</bpmn:incoming>
-      <bpmn:outgoing>c2</bpmn:outgoing>
+      <bpmn:incoming>f9</bpmn:incoming>
+      <bpmn:outgoing>f10</bpmn:outgoing>
     </bpmn:serviceTask>
 
     <bpmn:subProcess id="PerScored" name="For each account">
-      <bpmn:incoming>c2</bpmn:incoming>
-      <bpmn:outgoing>c3</bpmn:outgoing>
+      <bpmn:incoming>f10</bpmn:incoming>
+      <bpmn:outgoing>f11</bpmn:outgoing>
       <bpmn:property id="verdicts" name="verdicts"/>
       <bpmn:multiInstanceLoopCharacteristics isSequential="true">
-        <bpmn:loopCardinality>subset.count</bpmn:loopCardinality>
+        <bpmn:loopCardinality>count(subset)</bpmn:loopCardinality>
         <bpmn:loopDataOutputRef>rows</bpmn:loopDataOutputRef>
         <bpmn:outputDataItem name="row"/>
       </bpmn:multiInstanceLoopCharacteristics>
@@ -271,16 +284,16 @@
         <bpmn:extensionElements>
           <spiff:serviceTaskOperator id="generate" resultVariable="verdict">
             <spiff:parameters>
+              <spiff:parameter id="of" value="[subset, themes]"/>
+              <spiff:parameter id="gives" value="&apos;verdict&apos;"/>
               <spiff:parameter id="prompt" value="&apos;Does this one theme appear in this one account?&apos;"/>
-              <spiff:parameter id="of" value="subset"/>
-              <spiff:parameter id="against" value="labels"/>
             </spiff:parameters>
           </spiff:serviceTaskOperator>
         </bpmn:extensionElements>
         <bpmn:incoming>s1</bpmn:incoming>
         <bpmn:outgoing>s2</bpmn:outgoing>
         <bpmn:multiInstanceLoopCharacteristics isSequential="true">
-          <bpmn:loopCardinality>labels.length</bpmn:loopCardinality>
+          <bpmn:loopCardinality>count(themes)</bpmn:loopCardinality>
           <bpmn:loopDataOutputRef>verdicts</bpmn:loopDataOutputRef>
           <bpmn:outputDataItem name="verdict"/>
         </bpmn:multiInstanceLoopCharacteristics>
@@ -290,8 +303,9 @@
         <bpmn:extensionElements>
           <spiff:serviceTaskOperator id="combine" resultVariable="row">
             <spiff:parameters>
-              <spiff:parameter id="how" value="&apos;one row of yes and no&apos;"/>
               <spiff:parameter id="parts" value="verdicts"/>
+              <spiff:parameter id="gives" value="&apos;row&apos;"/>
+              <spiff:parameter id="how" value="&apos;one column per theme&apos;"/>
             </spiff:parameters>
           </spiff:serviceTaskOperator>
         </bpmn:extensionElements>
@@ -306,81 +320,69 @@
       <bpmn:sequenceFlow id="s3" sourceRef="RowUp" targetRef="EndScored"/>
     </bpmn:subProcess>
 
-    <bpmn:serviceTask id="Matrix" name="Combine">
-      <bpmn:extensionElements>
-        <spiff:serviceTaskOperator id="combine" resultVariable="themes">
-          <spiff:parameters>
-            <spiff:parameter id="how" value="&apos;stack the rows&apos;"/>
-            <spiff:parameter id="parts" value="rows"/>
-          </spiff:parameters>
-        </spiff:serviceTaskOperator>
-      </bpmn:extensionElements>
-      <bpmn:incoming>c3</bpmn:incoming>
-      <bpmn:outgoing>c4</bpmn:outgoing>
-    </bpmn:serviceTask>
-
     <bpmn:serviceTask id="WithContext" name="Join">
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="join" resultVariable="joined">
           <spiff:parameters>
+            <spiff:parameter id="left" value="rows"/>
+            <spiff:parameter id="right" value="context"/>
+            <spiff:parameter id="gives" value="&apos;collection[pair[row, site]]&apos;"/>
             <spiff:parameter id="on" value="&apos;account identifier&apos;"/>
-            <spiff:parameter id="parts" value="[themes, context]"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
-      <bpmn:incoming>c4</bpmn:incoming>
-      <bpmn:outgoing>c5</bpmn:outgoing>
+      <bpmn:incoming>f11</bpmn:incoming>
+      <bpmn:outgoing>f12</bpmn:outgoing>
     </bpmn:serviceTask>
 
     <bpmn:serviceTask id="Associate" name="Test">
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="test" resultVariable="tested">
           <spiff:parameters>
-            <spiff:parameter id="test" value="&apos;each theme against land cover, corrected for many tests&apos;"/>
             <spiff:parameter id="of" value="joined"/>
+            <spiff:parameter id="gives" value="&apos;collection[finding]&apos;"/>
+            <spiff:parameter id="test" value="&apos;each theme against land cover, corrected for many tests&apos;"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
-      <bpmn:incoming>c5</bpmn:incoming>
-      <bpmn:outgoing>c6</bpmn:outgoing>
+      <bpmn:incoming>f12</bpmn:incoming>
+      <bpmn:outgoing>f13</bpmn:outgoing>
     </bpmn:serviceTask>
 
     <bpmn:serviceTask id="Significant" name="Select">
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="select" resultVariable="findings">
           <spiff:parameters>
-            <spiff:parameter id="where" value="&apos;unlikely to be chance&apos;"/>
             <spiff:parameter id="of" value="tested"/>
+            <spiff:parameter id="gives" value="&apos;collection[finding]&apos;"/>
+            <spiff:parameter id="where" value="&apos;unlikely to be chance&apos;"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
-      <bpmn:incoming>c6</bpmn:incoming>
-      <bpmn:outgoing>f13</bpmn:outgoing>
+      <bpmn:incoming>f13</bpmn:incoming>
+      <bpmn:outgoing>f14</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <bpmn:endEvent id="End"><bpmn:incoming>f13</bpmn:incoming></bpmn:endEvent>
+    <bpmn:endEvent id="End"><bpmn:incoming>f14</bpmn:incoming></bpmn:endEvent>
 
     <bpmn:sequenceFlow id="f1" sourceRef="Start" targetRef="Fork"/>
-    <bpmn:sequenceFlow id="f2" sourceRef="Fork" targetRef="ReadDocuments"/>
-    <bpmn:sequenceFlow id="f3" sourceRef="ReadDocuments" targetRef="PerDocument"/>
-    <bpmn:sequenceFlow id="f_ctx" sourceRef="Fork" targetRef="ReadContext"/>
-    <bpmn:sequenceFlow id="f4" sourceRef="PerDocument" targetRef="Pool"/>
-    <bpmn:sequenceFlow id="f5" sourceRef="Pool" targetRef="EmbedEach"/>
-    <bpmn:sequenceFlow id="f6" sourceRef="EmbedEach" targetRef="Refine"/>
-    <bpmn:sequenceFlow id="f7" sourceRef="Refine" targetRef="NameGroups"/>
-    <bpmn:sequenceFlow id="f8" sourceRef="NameGroups" targetRef="Merge"/>
-    <bpmn:sequenceFlow id="f_ctx2" sourceRef="ReadContext" targetRef="Merge"/>
-    <bpmn:sequenceFlow id="f10" sourceRef="Merge" targetRef="Subset"/>
-    <bpmn:sequenceFlow id="c2" sourceRef="Subset" targetRef="PerScored"/>
-    <bpmn:sequenceFlow id="c3" sourceRef="PerScored" targetRef="Matrix"/>
-    <bpmn:sequenceFlow id="c4" sourceRef="Matrix" targetRef="WithContext"/>
-    <bpmn:sequenceFlow id="c5" sourceRef="WithContext" targetRef="Associate"/>
-    <bpmn:sequenceFlow id="c6" sourceRef="Associate" targetRef="Significant"/>
-    <bpmn:sequenceFlow id="f13" sourceRef="Significant" targetRef="End"/>
+    <bpmn:sequenceFlow id="f2" sourceRef="Fork" targetRef="ReadAccounts"/>
+    <bpmn:sequenceFlow id="f3" sourceRef="ReadAccounts" targetRef="PerAccount"/>
+    <bpmn:sequenceFlow id="f4" sourceRef="PerAccount" targetRef="Pool"/>
+    <bpmn:sequenceFlow id="f5" sourceRef="Pool" targetRef="Refine"/>
+    <bpmn:sequenceFlow id="f6" sourceRef="Refine" targetRef="Merge"/>
+    <bpmn:sequenceFlow id="f7" sourceRef="Fork" targetRef="ReadContext"/>
+    <bpmn:sequenceFlow id="f8" sourceRef="ReadContext" targetRef="Merge"/>
+    <bpmn:sequenceFlow id="f9" sourceRef="Merge" targetRef="Subset"/>
+    <bpmn:sequenceFlow id="f10" sourceRef="Subset" targetRef="PerScored"/>
+    <bpmn:sequenceFlow id="f11" sourceRef="PerScored" targetRef="WithContext"/>
+    <bpmn:sequenceFlow id="f12" sourceRef="WithContext" targetRef="Associate"/>
+    <bpmn:sequenceFlow id="f13" sourceRef="Associate" targetRef="Significant"/>
+    <bpmn:sequenceFlow id="f14" sourceRef="Significant" targetRef="End"/>
 
-    <bpmn:textAnnotation id="note1"><bpmn:text>Several readings of each account, so unsteady ones show up</bpmn:text></bpmn:textAnnotation>
-    <bpmn:association id="a_note1" sourceRef="PerDocument" targetRef="note1"/>
-    <bpmn:textAnnotation id="note2"><bpmn:text>Near-identical wordings collapse into one shared vocabulary</bpmn:text></bpmn:textAnnotation>
+    <bpmn:textAnnotation id="note1"><bpmn:text>Each account is read twice, so unsteady themes show up</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="a_note1" sourceRef="PerAccount" targetRef="note1"/>
+    <bpmn:textAnnotation id="note2"><bpmn:text>Each round merges near-identical wordings, so the vocabulary settles</bpmn:text></bpmn:textAnnotation>
     <bpmn:association id="a_note2" sourceRef="Refine" targetRef="note2"/>
     <bpmn:textAnnotation id="note3"><bpmn:text>A person decides how similar counts as the same</bpmn:text></bpmn:textAnnotation>
     <bpmn:association id="a_note3" sourceRef="Refine" targetRef="note3"/>
@@ -388,6 +390,8 @@
     <bpmn:association id="a_note4" sourceRef="ReadContext" targetRef="note4"/>
     <bpmn:textAnnotation id="note5"><bpmn:text>One account per participant, so the samples stay independent</bpmn:text></bpmn:textAnnotation>
     <bpmn:association id="a_note5" sourceRef="Subset" targetRef="note5"/>
+    <bpmn:textAnnotation id="note7"><bpmn:text>Accounts with no site record drop out here</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="a_note7" sourceRef="WithContext" targetRef="note7"/>
     <bpmn:textAnnotation id="note6"><bpmn:text>One judgement at a time: this theme, this account</bpmn:text></bpmn:textAnnotation>
     <bpmn:association id="a_note6" sourceRef="PerScored" targetRef="note6"/>
   </bpmn:process>
@@ -398,17 +402,17 @@
       <bpmndi:BPMNShape id="s_Start" bpmnElement="Start">
         <dc:Bounds x="140" y="232" width="36" height="36"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_ReadDocuments" bpmnElement="ReadDocuments">
-        <dc:Bounds x="280" y="210" width="110" height="80"/>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Fork" bpmnElement="Fork">
         <dc:Bounds x="200" y="225" width="50" height="50"/>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_ReadAccounts" bpmnElement="ReadAccounts">
+        <dc:Bounds x="280" y="210" width="110" height="80"/>
+      </bpmndi:BPMNShape>
 
-      <bpmndi:BPMNShape id="s_PerDocument" bpmnElement="PerDocument" isExpanded="true">
+      <bpmndi:BPMNShape id="s_PerAccount" bpmnElement="PerAccount" isExpanded="true">
         <dc:Bounds x="450" y="120" width="640" height="320"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_StartDocument" bpmnElement="StartDocument">
+      <bpmndi:BPMNShape id="s_StartAccount" bpmnElement="StartAccount">
         <dc:Bounds x="480" y="232" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_PerPass" bpmnElement="PerPass" isExpanded="true">
@@ -432,36 +436,37 @@
       <bpmndi:BPMNShape id="s_EndPass" bpmnElement="EndPass">
         <dc:Bounds x="930" y="232" width="36" height="36"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_EndDocument" bpmnElement="EndDocument">
+      <bpmndi:BPMNShape id="s_EndAccount" bpmnElement="EndAccount">
         <dc:Bounds x="1020" y="232" width="36" height="36"/>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="s_Pool" bpmnElement="Pool">
         <dc:Bounds x="1180" y="210" width="110" height="80"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_EmbedEach" bpmnElement="EmbedEach">
-        <dc:Bounds x="1180" y="520" width="110" height="80"/>
-      </bpmndi:BPMNShape>
+
       <bpmndi:BPMNShape id="s_Refine" bpmnElement="Refine" isExpanded="true">
-        <dc:Bounds x="560" y="470" width="600" height="180"/>
+        <dc:Bounds x="400" y="470" width="880" height="180"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_StartRefine" bpmnElement="StartRefine">
-        <dc:Bounds x="1110" y="532" width="36" height="36"/>
+        <dc:Bounds x="1215" y="532" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_EmbedEach" bpmnElement="EmbedEach">
+        <dc:Bounds x="1080" y="510" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Similarity" bpmnElement="Similarity">
-        <dc:Bounds x="970" y="510" width="110" height="80"/>
+        <dc:Bounds x="930" y="510" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Threshold" bpmnElement="Threshold">
-        <dc:Bounds x="810" y="510" width="110" height="80"/>
+        <dc:Bounds x="780" y="510" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Cluster" bpmnElement="Cluster">
-        <dc:Bounds x="650" y="510" width="110" height="80"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_EndRefine" bpmnElement="EndRefine">
-        <dc:Bounds x="585" y="532" width="36" height="36"/>
+        <dc:Bounds x="630" y="510" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_NameGroups" bpmnElement="NameGroups">
-        <dc:Bounds x="400" y="520" width="110" height="80"/>
+        <dc:Bounds x="480" y="510" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_EndRefine" bpmnElement="EndRefine">
+        <dc:Bounds x="425" y="532" width="36" height="36"/>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="s_ReadContext" bpmnElement="ReadContext">
@@ -488,27 +493,24 @@
       <bpmndi:BPMNShape id="s_EndScored" bpmnElement="EndScored">
         <dc:Bounds x="1065" y="902" width="36" height="36"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_Matrix" bpmnElement="Matrix">
+      <bpmndi:BPMNShape id="s_WithContext" bpmnElement="WithContext">
         <dc:Bounds x="1170" y="880" width="110" height="80"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_WithContext" bpmnElement="WithContext">
+      <bpmndi:BPMNShape id="s_Associate" bpmnElement="Associate">
         <dc:Bounds x="1310" y="880" width="110" height="80"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_Associate" bpmnElement="Associate">
+      <bpmndi:BPMNShape id="s_Significant" bpmnElement="Significant">
         <dc:Bounds x="1450" y="880" width="110" height="80"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_Significant" bpmnElement="Significant">
-        <dc:Bounds x="1590" y="880" width="110" height="80"/>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_End" bpmnElement="End">
-        <dc:Bounds x="1730" y="902" width="36" height="36"/>
+        <dc:Bounds x="1590" y="902" width="36" height="36"/>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="s_note1" bpmnElement="note1">
         <dc:Bounds x="610" y="30" width="310" height="56"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_note2" bpmnElement="note2">
-        <dc:Bounds x="1180" y="416" width="290" height="56"/>
+        <dc:Bounds x="1330" y="480" width="300" height="56"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_note3" bpmnElement="note3">
         <dc:Bounds x="900" y="672" width="300" height="56"/>
@@ -522,6 +524,9 @@
       <bpmndi:BPMNShape id="s_note6" bpmnElement="note6">
         <dc:Bounds x="700" y="1050" width="320" height="56"/>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_note7" bpmnElement="note7">
+        <dc:Bounds x="1130" y="1000" width="300" height="56"/>
+      </bpmndi:BPMNShape>
 
       <bpmndi:BPMNEdge id="e_f1" bpmnElement="f1">
         <di:waypoint x="176" y="250"/><di:waypoint x="200" y="250"/>
@@ -531,10 +536,6 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f3" bpmnElement="f3">
         <di:waypoint x="390" y="250"/><di:waypoint x="450" y="250"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_f_ctx" bpmnElement="f_ctx">
-        <di:waypoint x="225" y="275"/><di:waypoint x="225" y="760"/>
-        <di:waypoint x="280" y="760"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_d1" bpmnElement="d1">
         <di:waypoint x="516" y="250"/><di:waypoint x="545" y="250"/>
@@ -561,37 +562,40 @@
         <di:waypoint x="1090" y="250"/><di:waypoint x="1180" y="250"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f5" bpmnElement="f5">
-        <di:waypoint x="1235" y="290"/><di:waypoint x="1235" y="520"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_f6" bpmnElement="f6">
-        <di:waypoint x="1180" y="560"/><di:waypoint x="1160" y="560"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_r0" bpmnElement="r0">
-        <di:waypoint x="1110" y="550"/><di:waypoint x="1080" y="550"/>
+        <di:waypoint x="1235" y="290"/><di:waypoint x="1235" y="470"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_r1" bpmnElement="r1">
-        <di:waypoint x="970" y="550"/><di:waypoint x="920" y="550"/>
+        <di:waypoint x="1215" y="550"/><di:waypoint x="1190" y="550"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_r2" bpmnElement="r2">
-        <di:waypoint x="810" y="550"/><di:waypoint x="760" y="550"/>
+        <di:waypoint x="1080" y="550"/><di:waypoint x="1040" y="550"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_r3" bpmnElement="r3">
-        <di:waypoint x="650" y="550"/><di:waypoint x="621" y="550"/>
+        <di:waypoint x="930" y="550"/><di:waypoint x="890" y="550"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_r4" bpmnElement="r4">
+        <di:waypoint x="780" y="550"/><di:waypoint x="740" y="550"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_r5" bpmnElement="r5">
+        <di:waypoint x="630" y="550"/><di:waypoint x="590" y="550"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_r6" bpmnElement="r6">
+        <di:waypoint x="480" y="550"/><di:waypoint x="461" y="550"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f6" bpmnElement="f6">
+        <di:waypoint x="595" y="650"/><di:waypoint x="595" y="735"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f7" bpmnElement="f7">
-        <di:waypoint x="560" y="560"/><di:waypoint x="510" y="560"/>
+        <di:waypoint x="225" y="275"/><di:waypoint x="225" y="760"/>
+        <di:waypoint x="280" y="760"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f8" bpmnElement="f8">
-        <di:waypoint x="455" y="600"/><di:waypoint x="455" y="640"/>
-        <di:waypoint x="595" y="640"/><di:waypoint x="595" y="735"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_f_ctx2" bpmnElement="f_ctx2">
         <di:waypoint x="390" y="760"/><di:waypoint x="570" y="760"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_f10" bpmnElement="f10">
+      <bpmndi:BPMNEdge id="e_f9" bpmnElement="f9">
         <di:waypoint x="595" y="785"/><di:waypoint x="595" y="880"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_c2" bpmnElement="c2">
+      <bpmndi:BPMNEdge id="e_f10" bpmnElement="f10">
         <di:waypoint x="650" y="920"/><di:waypoint x="700" y="920"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_s1" bpmnElement="s1">
@@ -603,27 +607,24 @@
       <bpmndi:BPMNEdge id="e_s3" bpmnElement="s3">
         <di:waypoint x="1040" y="920"/><di:waypoint x="1065" y="920"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_c3" bpmnElement="c3">
+      <bpmndi:BPMNEdge id="e_f11" bpmnElement="f11">
         <di:waypoint x="1120" y="920"/><di:waypoint x="1170" y="920"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_c4" bpmnElement="c4">
+      <bpmndi:BPMNEdge id="e_f12" bpmnElement="f12">
         <di:waypoint x="1280" y="920"/><di:waypoint x="1310" y="920"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_c5" bpmnElement="c5">
+      <bpmndi:BPMNEdge id="e_f13" bpmnElement="f13">
         <di:waypoint x="1420" y="920"/><di:waypoint x="1450" y="920"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_c6" bpmnElement="c6">
+      <bpmndi:BPMNEdge id="e_f14" bpmnElement="f14">
         <di:waypoint x="1560" y="920"/><di:waypoint x="1590" y="920"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_f13" bpmnElement="f13">
-        <di:waypoint x="1700" y="920"/><di:waypoint x="1730" y="920"/>
       </bpmndi:BPMNEdge>
 
       <bpmndi:BPMNEdge id="e_a_note1" bpmnElement="a_note1">
         <di:waypoint x="760" y="120"/><di:waypoint x="760" y="86"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_a_note2" bpmnElement="a_note2">
-        <di:waypoint x="1100" y="470"/><di:waypoint x="1180" y="450"/>
+        <di:waypoint x="1280" y="530"/><di:waypoint x="1330" y="514"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_a_note3" bpmnElement="a_note3">
         <di:waypoint x="1000" y="650"/><di:waypoint x="1000" y="672"/>
@@ -636,6 +637,9 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_a_note6" bpmnElement="a_note6">
         <di:waypoint x="860" y="1020"/><di:waypoint x="860" y="1050"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_a_note7" bpmnElement="a_note7">
+        <di:waypoint x="1225" y="960"/><di:waypoint x="1225" y="1000"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

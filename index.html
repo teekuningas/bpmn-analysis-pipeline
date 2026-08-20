@@ -48,15 +48,29 @@
     background: var(--active); margin-right: 6px; vertical-align: 1.5px;
   }
 
-  #caption { height: 46px; font-size: 13.5px; color: var(--faint); text-align: center; }
-  #caption .setting { font-size: 12.5px; font-style: italic; margin-top: 2px; }
-  #caption .loop { margin-left: 14px; font-family: ui-monospace, Menlo, monospace;
-                   font-size: 12px; color: var(--active); }
-  #caption .problem { color: var(--active); font-size: 12.5px; }
+  #types {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 15px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--line);
+  }
+  #types span { cursor: default; transition: color .2s; }
+  #types span:hover { color: var(--ink); }
+
+  #caption { min-height: 74px; font-size: 13.5px; color: var(--faint); text-align: center; }
   #caption .label { color: var(--ink); }
   #caption .sig {
-    margin-left: 12px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+    margin-left: 12px; color: var(--ink);
+    font-family: ui-monospace, Menlo, monospace; font-size: 12px;
   }
+  #caption .shape {
+    margin-left: 14px; opacity: .55;
+    font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+  }
+  #caption .loop {
+    margin-top: 3px; color: var(--active);
+    font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+  }
+  #caption .setting { font-size: 12.5px; font-style: italic; margin-top: 3px; }
+  #caption .problem { color: var(--active); font-size: 12.5px; }
 
   button {
     font: inherit; font-size: 13.5px; padding: 7px 22px; border-radius: 999px;
@@ -113,6 +127,7 @@
 <footer>
   <div id="caption"></div>
   <div id="legend"></div>
+  <div id="types"></div>
   <button id="run">Run</button>
 </footer>
 

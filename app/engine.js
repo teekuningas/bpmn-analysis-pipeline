@@ -97,10 +97,17 @@ export function parseBpmn(xmlText) {
   return processes;
 }
 
+// The one helper an expression may use: how many are in a value, whether it
+// arrived as a collected list or as a single result.
+const HELPERS = {
+  count: (value) => (Array.isArray(value) ? value.length : value?.count ?? 1),
+};
+
 function evaluate(expression, data) {
-  const keys = Object.keys(data).filter((k) => /^[A-Za-z_$][\w$]*$/.test(k));
+  const scope = { ...data, ...HELPERS };
+  const keys = Object.keys(scope).filter((k) => /^[A-Za-z_$][\w$]*$/.test(k));
   try {
-    return new Function(...keys, `"use strict"; return (${expression});`)(...keys.map((k) => data[k]));
+    return new Function(...keys, `"use strict"; return (${expression});`)(...keys.map((k) => scope[k]));
   } catch (cause) {
     throw new Error(`cannot evaluate "${expression}": ${cause.message}`);
   }
@@ -167,7 +174,7 @@ export class Engine {
     const collected = [];
 
     for (let i = 0; i < total; i++) {
-      const scoped = collects ? { ...data, loopIndex: i } : data;
+      const scoped = collects ? { ...data } : data;
       const result = await this.executeBody(el, scoped);
       if (collects) collected.push(el.loop.outputItem ? scoped[el.loop.outputItem] : result);
       await this.services.onEvent({ type: 'progress', element: el, index: i + 1, total });
