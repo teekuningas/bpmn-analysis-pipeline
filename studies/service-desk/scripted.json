@@ -1,0 +1,17 @@
+{
+  "note": "The stand-in's whole vocabulary for this study: a label and the words that make it.",
+  "lexicon": [
+    { "label": "Hitting a plan limit", "match": ["limit", "limits", "cap", "caps", "capped", "quota", "monthly"] },
+    { "label": "Billing and invoices", "match": ["invoice", "invoices", "billed", "billing", "charged", "card", "renewal", "vat", "seats"] },
+    { "label": "Waiting for support", "match": ["waited", "waiting", "reply", "queue", "days", "chat", "ticket"] },
+    { "label": "Upgrade prompts in the way", "match": ["banner", "upgrade", "advertising", "sell", "sold", "pricing"] },
+    { "label": "Integrations and the API", "match": ["api", "webhook", "integration", "endpoint", "docs", "warehouse", "polling"] },
+    { "label": "Something plainly broken", "match": ["fails", "broken", "breaks", "error", "silently", "declined", "duplicates"] },
+    { "label": "Hard to find or hard to read", "match": ["navigation", "menu", "scroll", "unreadable", "grey", "focus", "invisible", "search", "sort"] },
+    { "label": "Getting the data out", "match": ["export", "csv", "attachments", "data"] },
+    { "label": "Signing in", "match": ["logs", "login", "sign", "password", "account", "directory"] },
+    { "label": "Things arriving late", "match": ["late", "delayed", "minutes", "notifications", "slow"] },
+    { "label": "Waiting for support to reply", "match": ["transcript", "session", "nine"] },
+    { "label": "Billing", "match": ["purchase", "order", "finance"] }
+  ]
+}

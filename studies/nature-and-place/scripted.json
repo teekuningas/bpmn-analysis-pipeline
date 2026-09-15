@@ -1,0 +1,19 @@
+{
+  "note": "What the scripted stand-in knows instead of language: a label, and the words that make it. Crude on purpose \u2014 it is the baseline a real model has to beat, and it lets the whole pipeline run before anything is downloaded.",
+  "lexicon": [
+    { "label": "Birdsong", "match": ["song", "songs", "singing", "sing", "sang", "birdsong", "melody", "melodies", "melodic"] },
+    { "label": "Watching birds", "match": ["bird", "birds", "wings", "winged", "feathers", "nest", "nests", "species"] },
+    { "label": "Closeness to nature", "match": ["nature"] },
+    { "label": "The peace of the countryside", "match": ["countryside", "rural", "farm", "farmhouse", "fields", "field", "meadow", "village"] },
+    { "label": "Silence", "match": ["silence", "silent", "quiet", "quieter", "stillness"] },
+    { "label": "City noise", "match": ["noise", "noisy", "traffic", "din", "clamour", "racket", "rumble", "sirens"] },
+    { "label": "Living in the city", "match": ["city", "cities", "urban", "town", "concrete", "asphalt", "street", "streets"] },
+    { "label": "Childhood memories", "match": ["childhood", "child", "grew", "young", "youth", "grandparents", "parents"] },
+    { "label": "Parks and gardens", "match": ["park", "parks", "garden", "gardens", "green"] },
+    { "label": "Mornings", "match": ["morning", "mornings", "sunrise", "dawn", "woke", "wake", "waking"] },
+    { "label": "The turn of the seasons", "match": ["summer", "winter", "spring", "autumn", "seasons", "snow"] },
+    { "label": "Feeling part of something greater", "match": ["greater", "whole", "connected", "connection", "harmony", "balance", "belonging"] },
+    { "label": "Birdsong in the morning", "match": ["dawn", "sunrise"] },
+    { "label": "Countryside", "match": ["hay", "grasses", "barn", "valley"] }
+  ]
+}

@@ -1,26 +1,22 @@
-// The type language, and the check that the wiring makes sense.
+// The type language, and the check that the wiring makes sense. A type is a
+// name optionally applied to other types — `theme`, `collection[theme]`,
+// `pair[row, site]`; single letters are variables and live only in primitives.
 //
-// A type is a name, optionally applied to other types: `theme`,
-// `collection[theme]`, `pair[row, site]`. Single-letter names are variables and
-// appear only in the primitives' generic signatures.
+// Only two things are written into a process and the rest is derived: a box
+// declares what it `gives`, and a loop declares what it counts over. From those,
 //
-// Two things are written into the model and the rest is derived. A box declares
-// what it gives. A loop declares what it counts over. From those:
+//   a loop that collects gives a collection of whatever its body left behind;
+//   inside a loop counting over a collection, that name means one element of it;
+//   a name written both inside a repeating scope and outside it is what the
+//   loop carries round, so its type is the loop's own signature.
 //
-//   - a loop that collects gives a collection of whatever its body left behind;
-//   - inside a loop counting over a collection, that collection's name means
-//     one element of it — which is what `map` is;
-//   - a name written both inside a repeating scope and outside it is what that
-//     loop carries round, so its type is the loop's own signature.
-//
-// Runs before the process does; a model that does not check does not run.
+// A process that does not check does not run.
 
+import { walk, everyElement } from './bpmn.js';
 import { getPrimitive, generic } from './primitives.js';
 
 const OVER = /^count\(([A-Za-z_]\w*)\)$/;
 const unquote = (value) => String(value).replace(/^'|'$/g, '');
-
-// ---------------------------------------------------------------- expressions
 
 function parse(source) {
   const tokens = source.match(/[A-Za-z_]\w*|[[\],]/g) || [];
@@ -69,23 +65,10 @@ const names = (type, found = new Set()) => {
   return found;
 };
 
-// -------------------------------------------------------------------- walking
-
-function walk(scope, path = [], found = []) {
-  for (const el of scope.elements.values()) {
-    const here = [...path, el];
-    found.push({ el, path: here });
-    if (el.scope) walk(el.scope, here, found);
-  }
-  return found;
-}
-
 const under = (el) => (el.scope ? walk(el.scope).map((each) => each.el.id) : []);
 
-// ------------------------------------------------------------------- the pass
-
 export function analyse(processes) {
-  const all = [...processes.values()].flatMap((scope) => walk(scope));
+  const all = everyElement(processes);
   const problems = [];
   const types = new Map();
   const writers = new Map();
@@ -100,7 +83,6 @@ export function analyse(processes) {
     writers.set(name, [...(writers.get(name) || []), where]);
   };
 
-  // What each box says it gives.
   for (const { el } of all) {
     if (!el.op) continue;
     const declared = el.op.params.gives;
@@ -122,7 +104,6 @@ export function analyse(processes) {
     else declare(el.op.resultVariable, type, el.id);
   }
 
-  // What each collecting loop gives: a collection of whatever its body left.
   const settled = new Set();
   for (let pass = 0; pass <= all.length; pass += 1) {
     let moved = false;
@@ -143,7 +124,6 @@ export function analyse(processes) {
     }
   }
 
-  // Inside a loop counting over a collection, that name means one element.
   const oneAtATime = (path) => {
     const bound = new Map();
     for (const el of path) {
@@ -169,7 +149,6 @@ export function analyse(processes) {
     return type ? { type } : { error: `nothing gives "${name}"` };
   };
 
-  // Every box, against the primitive it claims to be.
   const info = new Map();
   for (const { el, path } of all) {
     if (!el.op) continue;
@@ -201,6 +180,20 @@ export function analyse(processes) {
       }
     }
 
+    for (const [param, pattern] of Object.entries(primitive.optional || {})) {
+      const expression = el.op.params[param];
+      if (expression === undefined) continue;
+      const actual = read(expression, bound);
+      if (actual.error) {
+        problems.push(`${el.id}: ${param} ${actual.error}`);
+        continue;
+      }
+      takes.push(actual.type);
+      if (!match(parse(pattern), actual.type, bindings)) {
+        problems.push(`${el.id}: ${param} wants ${pattern}, but "${expression}" is ${show(actual.type)}`);
+      }
+    }
+
     info.set(el.id, {
       label: primitive.label,
       generic: generic(primitive),
@@ -210,7 +203,6 @@ export function analyse(processes) {
     });
   }
 
-  // What the marker on a box does to its type.
   for (const { el } of all) {
     if (!el.loop) continue;
     const { cardinality, outputRef } = el.loop;

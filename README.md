@@ -1,15 +1,15 @@
-# Analysis pipeline as BPMN
+# Analysis pipelines as BPMN
 
-An analysis pipeline — accounts in, findings out — drawn as a BPMN process
-built from ten primitives. Everything else is arrangement: a multi-instance
-marker is `map`, a fork and join runs independent branches, a standard loop is
-`iterate`. `filter` and `fold` are not structure here but primitives — Select
-and Combine.
+An analysis — accounts in, findings out — drawn as a BPMN process built from six
+primitives, and then actually run, in the browser, with a real model if you want
+one. Everything else is arrangement: a multi-instance marker is `map`, a
+sequential one is also `fold`, a fork and join runs independent branches.
+`filter` and `fold` are not structure here but primitives — Select and Combine.
 
 Each primitive carries a shape — `Select` is `collection[a] → collection[a]` —
-and each box in the model fills it in: `collection[account] →
-collection[account]`. Hover a box to see what it takes and gives, or an arrow to
-see the value travelling along it. The wiring is type-checked before it runs.
+and each box in a process fills it in: `collection[account] →
+collection[account]`. Hover a box to see what it takes and gives, click it to
+see what it actually made. The wiring is type-checked before it runs.
 
 [**Live demo**](https://teekuningas.github.io/bpmn-analysis-pipeline/)
 
@@ -17,17 +17,52 @@ see the value travelling along it. The wiring is type-checked before it runs.
 python3 -m http.server 8000    # ES modules need http, not file://
 ```
 
+## What is here
+
 ```
-workflows/pipeline.bpmn   the process, editable in any BPMN modeller
-app/primitives.js         the vocabulary
-app/types.js              the type language, and the check
-app/engine.js             BPMN interpreter
-app/ui.js                 diagram and playback
-tools/check.py            structural and geometric checks on the model
+core/       the language and the interpreter — no dependencies
+runtime/    what the primitives do, and where the model comes from
+studies/    the analyses: a process, its data, its settings
+app/        the page
+tools/      the checks
 ```
 
-Primitives are signatures and durations, not implementations: the demo plays the
-process rather than computing anything. The engine covers the elements this
-diagram uses and nothing else — for real work use
+Strictly downward: `app → runtime → core`, and nothing in `core` knows there is
+a browser.
+
+## The two models you can run it with
+
+| | download | what it is |
+| --- | --- | --- |
+| **Scripted stand-in** | none | keyword matching. Not a language model — but every step runs and the statistics at the end are computed, not staged. The baseline a real model has to beat. |
+| **Gemma, in this tab** | ~1–3 GB | [Transformers.js](https://huggingface.co/docs/transformers.js) over WebGPU, falling back to WebAssembly where there is none. Press **Download** once; the browser keeps the weights, so nothing is committed here and later runs start straight away. |
+
+Replies are remembered, so a second run of the same thing is free. **Delay** holds
+on each step so a run can be watched rather than just waited out.
+
+## Adding an analysis
+
+A study is a folder under `studies/` and a line in `studies/index.json`:
+
+```
+studies/your-study/
+  study.json      title, question, sources, settings, how to show it
+  process.bpmn    the method — the only file a modeller touches
+  *.json          the sources the process reads by name
+```
+
+## Checking a change
+
+```sh
+python3 tools/check.py studies/<id>/process.bpmn   # structure and geometry
+node tools/smoke.mjs                               # every study, end to end
+```
+
+The type check runs in the page on load; a process that does not check does not
+run.
+
+The engine covers the elements these processes use and nothing else, and refuses
+a file that reaches outside it. For real work use
 [SpiffWorkflow](https://github.com/sartography/SpiffWorkflow),
-[bpmn-engine](https://github.com/paed01/bpmn-engine), or Camunda.
+[bpmn-engine](https://github.com/paed01/bpmn-engine), or Camunda — the
+`spiff:` extension elements are there so the same file can go to one.

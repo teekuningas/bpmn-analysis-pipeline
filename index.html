@@ -3,132 +3,53 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Analysis pipeline as BPMN</title>
+<title>Analysis pipelines as BPMN</title>
 <link rel="stylesheet" href="vendor/assets/diagram-js.css"/>
 <link rel="stylesheet" href="vendor/assets/bpmn-js.css"/>
-<style>
-  :root {
-    --paper: #faf9f5;
-    --ink: #4a4b45;
-    --faint: #9a9b92;
-    --line: #c3c4bb;
-    --active: #c08457;
-    --done: #8ba284;
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; }
-  body {
-    margin: 0; background: var(--paper); color: var(--ink);
-    font: 15px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: flex; flex-direction: column;
-  }
-
-  header {
-    padding: 22px 32px 6px; display: flex; align-items: baseline; gap: 14px;
-  }
-  header h1 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: .01em; }
-  header a { margin-left: auto; color: var(--faint); font-size: 13px; text-decoration: none; }
-  header a:hover { color: var(--ink); }
-
-  #canvas { flex: 1 1 auto; min-height: 0; }
-
-  footer {
-    padding: 16px 0 22px; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 12px;
-  }
-
-  #legend {
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 18px;
-    font-size: 12.5px; color: var(--faint);
-  }
-  #legend span { cursor: default; transition: color .2s; }
-  #legend span:hover { color: var(--ink); }
-  #legend span.model::before {
-    content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%;
-    background: var(--active); margin-right: 6px; vertical-align: 1.5px;
-  }
-
-  #types {
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 15px;
-    font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--line);
-  }
-  #types span { cursor: default; transition: color .2s; }
-  #types span:hover { color: var(--ink); }
-
-  #caption { min-height: 74px; font-size: 13.5px; color: var(--faint); text-align: center; }
-  #caption .label { color: var(--ink); }
-  #caption .sig {
-    margin-left: 12px; color: var(--ink);
-    font-family: ui-monospace, Menlo, monospace; font-size: 12px;
-  }
-  #caption .shape {
-    margin-left: 14px; opacity: .55;
-    font-family: ui-monospace, Menlo, monospace; font-size: 12px;
-  }
-  #caption .loop {
-    margin-top: 3px; color: var(--active);
-    font-family: ui-monospace, Menlo, monospace; font-size: 12px;
-  }
-  #caption .setting { font-size: 12.5px; font-style: italic; margin-top: 3px; }
-  #caption .problem { color: var(--active); font-size: 12.5px; }
-
-  button {
-    font: inherit; font-size: 13.5px; padding: 7px 22px; border-radius: 999px;
-    border: 1px solid var(--line); background: transparent; color: var(--ink);
-    cursor: pointer; transition: border-color .2s, color .2s;
-  }
-  button:hover:not(:disabled) { border-color: var(--ink); }
-  button:disabled { color: var(--faint); border-color: var(--line); cursor: default; }
-
-  .djs-container { background: var(--paper) !important; }
-  .djs-element .djs-visual > :nth-child(1) {
-    stroke: var(--line) !important; fill: #fff !important; transition: stroke .4s, fill .4s;
-  }
-  .djs-element .djs-visual text { fill: var(--ink) !important; font-weight: 400 !important; }
-  .djs-shape .djs-visual path { fill: var(--faint) !important; stroke: var(--faint) !important; }
-  .djs-connection .djs-visual path {
-    stroke: var(--line) !important; fill: none !important;
-  }
-  marker path, marker polyline, marker circle {
-    fill: var(--line) !important; stroke: var(--line) !important;
-  }
-  .djs-element.is-active .djs-visual > :nth-child(1) {
-    stroke: var(--active) !important; stroke-width: 2.5px !important; fill: #fdf6ee !important;
-  }
-  .djs-element.is-running .djs-visual > :nth-child(1) {
-    stroke: var(--active) !important; stroke-width: 2px !important;
-  }
-  .djs-element.is-model .djs-visual > :nth-child(1) { fill: #fbf6ee !important; }
-  .djs-element.is-lit .djs-visual > :nth-child(1) {
-    stroke: var(--active) !important; stroke-width: 2px !important;
-  }
-  .djs-element.is-done .djs-visual > :nth-child(1) { stroke: var(--done) !important; }
-
-  .djs-element[data-element-id^="note"] .djs-visual text { fill: var(--faint) !important; }
-  .djs-element[data-element-id^="note"] .djs-visual path {
-    fill: none !important; stroke: var(--line) !important;
-  }
-
-  .count {
-    font-family: ui-monospace, Menlo, monospace; font-size: 10.5px;
-    color: var(--active); background: var(--paper); padding: 0 5px;
-  }
-  .bjs-powered-by { opacity: .25; }
-</style>
+<link rel="stylesheet" href="app/theme.css"/>
 </head>
 <body>
 <header>
-  <h1>Analysis pipeline as BPMN</h1>
+  <h1>Analysis pipelines as BPMN</h1>
+  <select id="study" aria-label="Which analysis"></select>
+  <span id="question"></span>
   <a href="https://github.com/teekuningas/bpmn-analysis-pipeline">source</a>
 </header>
 
-<div id="canvas"></div>
+<main>
+  <div id="canvas"></div>
+  <aside id="drawer" hidden>
+    <nav id="tabs">
+      <button type="button" data-tab="data">Data</button>
+      <button type="button" data-tab="value">Value</button>
+      <button type="button" data-tab="log">Log</button>
+      <button type="button" data-tab="result">Result</button>
+      <button type="button" data-tab="model" class="apart">Model</button>
+      <button type="button" id="close" aria-label="Close">×</button>
+    </nav>
+    <div id="panel"></div>
+  </aside>
+</main>
 
 <footer>
   <div id="caption"></div>
   <div id="legend"></div>
   <div id="types"></div>
-  <button id="run">Run</button>
+
+  <div id="controls">
+    <span class="field">Model <button type="button" id="model">Scripted stand-in</button></span>
+    <span id="settings"></span>
+    <label class="field" title="How long to hold on each step, so a run can be followed">
+      Delay
+      <input type="range" id="pace" min="0" max="600" step="50" value="150"/>
+      <output id="pace-out">150 ms</output>
+    </label>
+    <button type="button" id="browse">Data</button>
+    <button type="button" id="run">Run</button>
+    <button type="button" id="stop" hidden>Stop</button>
+  </div>
+
+  <div id="progress"></div>
 </footer>
 
 <script src="vendor/bpmn-navigated-viewer.js"></script>

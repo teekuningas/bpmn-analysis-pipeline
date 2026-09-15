@@ -1,0 +1,290 @@
+[
+ {
+  "id": "sim_0000",
+  "setting": "urban",
+  "nearest_town": "Rovaniemi",
+  "km_from_town": 31.8
+ },
+ {
+  "id": "sim_0001",
+  "setting": "rural",
+  "nearest_town": "Helsinki",
+  "km_from_town": 73.2
+ },
+ {
+  "id": "sim_0002",
+  "setting": "urban",
+  "nearest_town": "Helsinki",
+  "km_from_town": 38.2
+ },
+ {
+  "id": "sim_0003",
+  "setting": "urban",
+  "nearest_town": "Turku",
+  "km_from_town": 13.5
+ },
+ {
+  "id": "sim_0004",
+  "setting": "urban",
+  "nearest_town": "Jyväskylä",
+  "km_from_town": 47.9
+ },
+ {
+  "id": "sim_0005",
+  "setting": "urban",
+  "nearest_town": "Tampere",
+  "km_from_town": 24.5
+ },
+ {
+  "id": "sim_0006",
+  "setting": "urban",
+  "nearest_town": "Rovaniemi",
+  "km_from_town": 23.5
+ },
+ {
+  "id": "sim_0007",
+  "setting": "urban",
+  "nearest_town": "Kuopio",
+  "km_from_town": 35.1
+ },
+ {
+  "id": "sim_0008",
+  "setting": "rural",
+  "nearest_town": "Helsinki",
+  "km_from_town": 82.1
+ },
+ {
+  "id": "sim_0009",
+  "setting": "urban",
+  "nearest_town": "Jyväskylä",
+  "km_from_town": 28.9
+ },
+ {
+  "id": "sim_0010",
+  "setting": "rural",
+  "nearest_town": "Rovaniemi",
+  "km_from_town": 70.4
+ },
+ {
+  "id": "sim_0011",
+  "setting": "urban",
+  "nearest_town": "Joensuu",
+  "km_from_town": 14.1
+ },
+ {
+  "id": "sim_0012",
+  "setting": "rural",
+  "nearest_town": "Rovaniemi",
+  "km_from_town": 102.0
+ },
+ {
+  "id": "sim_0014",
+  "setting": "urban",
+  "nearest_town": "Joensuu",
+  "km_from_town": 34.4
+ },
+ {
+  "id": "sim_0015",
+  "setting": "urban",
+  "nearest_town": "Kuopio",
+  "km_from_town": 36.0
+ },
+ {
+  "id": "sim_0016",
+  "setting": "rural",
+  "nearest_town": "Oulu",
+  "km_from_town": 107.4
+ },
+ {
+  "id": "sim_0017",
+  "setting": "rural",
+  "nearest_town": "Turku",
+  "km_from_town": 53.8
+ },
+ {
+  "id": "sim_0018",
+  "setting": "urban",
+  "nearest_town": "Tampere",
+  "km_from_town": 33.9
+ },
+ {
+  "id": "sim_0019",
+  "setting": "urban",
+  "nearest_town": "Jyväskylä",
+  "km_from_town": 41.9
+ },
+ {
+  "id": "sim_0020",
+  "setting": "urban",
+  "nearest_town": "Turku",
+  "km_from_town": 26.8
+ },
+ {
+  "id": "sim_0021",
+  "setting": "rural",
+  "nearest_town": "Tampere",
+  "km_from_town": 63.2
+ },
+ {
+  "id": "sim_0022",
+  "setting": "rural",
+  "nearest_town": "Kuopio",
+  "km_from_town": 78.4
+ },
+ {
+  "id": "sim_0023",
+  "setting": "rural",
+  "nearest_town": "Kuopio",
+  "km_from_town": 59.1
+ },
+ {
+  "id": "sim_0024",
+  "setting": "urban",
+  "nearest_town": "Oulu",
+  "km_from_town": 27.3
+ },
+ {
+  "id": "sim_0025",
+  "setting": "urban",
+  "nearest_town": "Oulu",
+  "km_from_town": 12.8
+ },
+ {
+  "id": "sim_0026",
+  "setting": "rural",
+  "nearest_town": "Jyväskylä",
+  "km_from_town": 57.8
+ },
+ {
+  "id": "sim_0027",
+  "setting": "urban",
+  "nearest_town": "Oulu",
+  "km_from_town": 35.4
+ },
+ {
+  "id": "sim_0028",
+  "setting": "rural",
+  "nearest_town": "Turku",
+  "km_from_town": 53.2
+ },
+ {
+  "id": "sim_0029",
+  "setting": "rural",
+  "nearest_town": "Tampere",
+  "km_from_town": 95.4
+ },
+ {
+  "id": "sim_0030",
+  "setting": "urban",
+  "nearest_town": "Oulu",
+  "km_from_town": 41.4
+ },
+ {
+  "id": "sim_0031",
+  "setting": "rural",
+  "nearest_town": "Jyväskylä",
+  "km_from_town": 70.4
+ },
+ {
+  "id": "sim_0032",
+  "setting": "urban",
+  "nearest_town": "Kuopio",
+  "km_from_town": 35.3
+ },
+ {
+  "id": "sim_0033",
+  "setting": "urban",
+  "nearest_town": "Rovaniemi",
+  "km_from_town": 21.0
+ },
+ {
+  "id": "sim_0034",
+  "setting": "urban",
+  "nearest_town": "Oulu",
+  "km_from_town": 6.2
+ },
+ {
+  "id": "sim_0035",
+  "setting": "urban",
+  "nearest_town": "Joensuu",
+  "km_from_town": 19.0
+ },
+ {
+  "id": "sim_0036",
+  "setting": "rural",
+  "nearest_town": "Tampere",
+  "km_from_town": 55.5
+ },
+ {
+  "id": "sim_0038",
+  "setting": "rural",
+  "nearest_town": "Rovaniemi",
+  "km_from_town": 81.3
+ },
+ {
+  "id": "sim_0039",
+  "setting": "rural",
+  "nearest_town": "Jyväskylä",
+  "km_from_town": 79.0
+ },
+ {
+  "id": "sim_0040",
+  "setting": "urban",
+  "nearest_town": "Jyväskylä",
+  "km_from_town": 13.2
+ },
+ {
+  "id": "sim_0041",
+  "setting": "urban",
+  "nearest_town": "Tampere",
+  "km_from_town": 44.3
+ },
+ {
+  "id": "sim_0042",
+  "setting": "rural",
+  "nearest_town": "Tampere",
+  "km_from_town": 51.8
+ },
+ {
+  "id": "sim_0043",
+  "setting": "rural",
+  "nearest_town": "Joensuu",
+  "km_from_town": 50.9
+ },
+ {
+  "id": "sim_0044",
+  "setting": "urban",
+  "nearest_town": "Tampere",
+  "km_from_town": 21.3
+ },
+ {
+  "id": "sim_0045",
+  "setting": "urban",
+  "nearest_town": "Turku",
+  "km_from_town": 20.4
+ },
+ {
+  "id": "sim_0046",
+  "setting": "urban",
+  "nearest_town": "Kuopio",
+  "km_from_town": 46.6
+ },
+ {
+  "id": "sim_0047",
+  "setting": "rural",
+  "nearest_town": "Tampere",
+  "km_from_town": 69.6
+ },
+ {
+  "id": "sim_0048",
+  "setting": "rural",
+  "nearest_town": "Kuopio",
+  "km_from_town": 79.9
+ },
+ {
+  "id": "sim_0049",
+  "setting": "urban",
+  "nearest_town": "Jyväskylä",
+  "km_from_town": 20.4
+ }
+]

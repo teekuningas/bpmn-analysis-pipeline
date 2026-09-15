@@ -1,241 +1,220 @@
-import { parseBpmn, Engine } from './engine.js';
-import { PRIMITIVES, TYPES, getPrimitive, generic } from './primitives.js';
-import { analyse } from './types.js';
+// Pick a study, look at it, run it, look at what came out. The only file that
+// knows there is a page.
 
-const BPMN_URL = 'workflows/pipeline.bpmn';
-const PROCESS_ID = 'Process_Pipeline';
+import { TYPES } from '../core/primitives.js';
+import { loadStudy } from '../runtime/study.js';
+import { Run } from '../runtime/run.js';
+import { Diagram, renderLegend, renderTypes } from './diagram.js';
+import { renderValue, renderSources, renderLog } from './inspect.js';
+import { renderModel, providerFor, chosen } from './model.js';
 
 const $ = (id) => document.getElementById(id);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const jitter = (ms) => ms * (0.85 + Math.random() * 0.3);
 
-let viewer;
-let processes;
-let model;
-let running = false;
-const badges = new Map();
+const text = async (url) => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url} — ${response.status}`);
+  return response.text();
+};
 
-async function loadDiagram() {
-  const xml = await (await fetch(BPMN_URL)).text();
-  processes = parseBpmn(xml);
-  model = analyse(processes);
-  viewer = new BpmnJS({ container: '#canvas' });
-  await viewer.importXML(xml);
-  const fit = () => viewer.get('canvas').zoom('fit-viewport', 'auto');
-  fit();
-  requestAnimationFrame(fit);
-  window.addEventListener('resize', fit);
+const state = {
+  diagram: null, study: null, xml: null, processes: null, processId: null,
+  model: null, run: null, picked: null, tab: 'data',
+};
 
-  for (const scope of processes.values()) {
-    eachElement(scope, (el) => {
-      if (el.op && getPrimitive(el.op.name).model) mark(el.id, 'is-model');
-    });
+const say = (message, bad = false) => {
+  $('progress').innerHTML = message ? `<span class="${bad ? 'bad' : ''}">${message}</span>` : '';
+};
+
+function openDrawer(tab) {
+  state.tab = tab;
+  $('drawer').hidden = false;
+  for (const button of $('tabs').querySelectorAll('[data-tab]')) {
+    button.classList.toggle('on', button.dataset.tab === tab);
   }
-
-  const bus = viewer.get('eventBus');
-  bus.on('element.hover', ({ element }) => {
-    if (running) return;
-    if (element.type === 'bpmn:SequenceFlow') carries(element.source?.id);
-    else describe(element.id);
-  });
-  bus.on('element.out', () => { if (!running) caption(); });
+  drawPanel();
 }
 
-function eachElement(scope, fn) {
-  for (const el of scope.elements.values()) {
-    fn(el);
-    if (el.scope) eachElement(el.scope, fn);
-  }
+function drawPanel() {
+  const panel = $('panel');
+  if (state.tab === 'data') return renderSources(panel, state.study);
+  if (state.tab === 'log') return renderLog(panel, state.run?.calls || []);
+  if (state.tab === 'result') return drawResult(panel);
+  if (state.tab === 'model') return renderModel(panel, { onChange: showChosen });
+  return drawValue(panel);
 }
 
-function find(id) {
-  const search = (scope) => {
-    if (scope.elements.has(id)) return scope.elements.get(id);
-    for (const el of scope.elements.values()) {
-      const found = el.scope && search(el.scope);
-      if (found) return found;
-    }
-    return null;
-  };
-  for (const scope of processes.values()) {
-    const found = search(scope);
-    if (found) return found;
-  }
-  return null;
-}
-
-// What the modeller fills in, as opposed to what flows in or what comes out.
-const SETTINGS = ['prompt', 'question', 'source', 'where', 'test', 'metric', 'by', 'how', 'on', 'model'];
-
-function caption({ label = '', signature = '', shape = '', loop = '', setting = '' } = {}) {
-  $('caption').innerHTML = label
-    ? `<div class="line"><span class="label">${label}</span>`
-      + (signature ? `<span class="sig">${signature}</span>` : '')
-      + (shape ? `<span class="shape">${shape}</span>` : '')
-      + '</div>'
-      + (loop ? `<div class="loop">${loop}</div>` : '')
-      + (setting ? `<div class="setting">${setting}</div>` : '')
-    : '';
-}
-
-function describe(id) {
-  const el = find(id);
-  const known = model.info.get(id);
-  if (!known) {
-    // Events and gateways make nothing; say their name, or say nothing.
-    caption(el?.name ? { label: el.name, setting: el.timer ? `${el.timer / 1000} seconds` : '' } : {});
+function drawResult(panel) {
+  const value = state.run?.data?.[state.study.chart?.of];
+  if (!value) {
+    panel.innerHTML = '<p class="empty">Nothing yet — run the process.</p>';
     return;
   }
-  caption({
-    label: known.label || el.name,
-    signature: known.signature,
-    shape: known.signature ? known.generic : '',
-    loop: known.loop,
-    setting: el.op ? settings(el.op.params) : '',
-  });
+  renderValue(panel, value, 'collection[finding]', state.study);
 }
 
-/** Hovering an arrow: the value that has just been made, and its type. */
-function carries(sourceId) {
-  const gives = model.info.get(sourceId)?.gives;
-  caption(gives ? { label: gives.name, signature: gives.type } : {});
-}
-
-function settings(params) {
-  return SETTINGS
-    .filter((k) => params[k] !== undefined)
-    .map((k) => String(params[k]).replace(/^'|'$/g, ''))
-    .join(' · ');
-}
-
-function mark(id, cls) {
-  try { viewer.get('canvas').addMarker(id, cls); } catch { /* not drawn */ }
-}
-function unmark(id, cls) {
-  try { viewer.get('canvas').removeMarker(id, cls); } catch { /* not drawn */ }
-}
-
-function badge(element, label) {
-  const overlays = viewer.get('overlays');
-  if (badges.has(element.id)) overlays.remove(badges.get(element.id));
-  badges.set(element.id, overlays.add(element.id, {
-    position: { top: -10, right: 14 },
-    html: `<span class="count">${label}</span>`,
-  }));
-}
-
-function clearDiagram() {
-  const overlays = viewer.get('overlays');
-  badges.forEach((id) => overlays.remove(id));
-  badges.clear();
-  for (const scope of processes.values()) {
-    eachElement(scope, (el) => ['is-active', 'is-running', 'is-done']
-      .forEach((c) => unmark(el.id, c)));
+function drawValue(panel) {
+  const known = state.picked && state.model.info.get(state.picked);
+  if (!known) {
+    panel.innerHTML = '<p class="empty">Click a box to see what it made.</p>';
+    return;
   }
+
+  const value = state.run?.valueOf(state.picked);
+  const notes = state.run?.notesOf(state.picked) || [];
+  panel.innerHTML = `
+    <h2>${known.label}</h2>
+    <p class="signature">${known.signature || ''}</p>
+    ${known.loop ? `<p class="lede">${known.loop}</p>` : ''}
+    ${notes.map((note) => `<p class="lede">${note}</p>`).join('')}
+    <h3>gives <code>${known.gives?.name || ''}</code></h3>
+    <div id="value"></div>`;
+
+  if (value === undefined) $('value').innerHTML = '<p class="empty">Not made yet.</p>';
+  else renderValue($('value'), value, known.gives?.type, state.study);
 }
 
-const size = (value) => (Array.isArray(value) ? value.length : value?.count ?? 1);
+const showChosen = () => { $('model').textContent = chosen(); };
+
+const hold = () => new Promise((resolve) => setTimeout(resolve, Number($('pace').value)));
+
+function watch(provider) {
+  const started = Date.now();
+  let calls = 0;
+  const elapsed = () => Math.round((Date.now() - started) / 1000);
+
+  return {
+    summary: () => `${calls} calls in ${elapsed()}s · ${provider.hits} cached`,
+    onEvent: ({ type, element, index, total, attempt }) => {
+      if (type === 'enter') {
+        state.diagram.mark(element.id, element.scope ? 'is-running' : 'is-active');
+        state.diagram.describe(element.id);
+        return hold();
+      }
+      if (type === 'exit') {
+        state.diagram.unmark(element.id, 'is-active');
+        state.diagram.unmark(element.id, 'is-running');
+        state.diagram.mark(element.id, 'is-done');
+      } else if (type === 'progress') {
+        state.diagram.badge(element.id, `${index}/${total}`);
+      } else if (type === 'fail') {
+        state.diagram.mark(element.id, 'is-failed');
+        say(`${element.id} gave nothing usable — trying again (${attempt})`, true);
+      } else if (type === 'call') {
+        calls += 1;
+        say(`${calls} calls · ${elapsed()}s · ${provider.hits} cached`);
+        if (state.tab === 'log') drawPanel();
+      }
+      return new Promise((resolve) => setTimeout(resolve, 0));
+    },
+  };
+}
 
 async function run() {
-  running = true;
-  $('run').disabled = true;
-  clearDiagram();
+  let provider;
+  try { provider = providerFor(state.study); } catch (err) { say(err.message, true); return; }
 
-  const services = {
-    wait: sleep,
-    call: async (name, params, el) => {
-      describe(el.id);
-      await sleep(jitter(getPrimitive(name).ms));
-      if (params.fails > Math.random()) throw new Error('unavailable');
-      if (name === 'join') return { count: Math.min(size(params.left), size(params.right)) };
-      const parts = params.parts?.flat(Infinity).map(size);
-      return {
-        count: params.count ?? (parts ? parts.reduce((t, n) => t + n, 0) : size(params.of)),
-      };
-    },
-    onEvent: async ({ type, element, index, total }) => {
-      if (type === 'enter') {
-        mark(element.id, element.scope ? 'is-running' : 'is-active');
-        if (!element.op && (model.info.has(element.id) || element.name)) describe(element.id);
-        await sleep(20);
-      } else if (type === 'exit') {
-        unmark(element.id, 'is-active');
-        unmark(element.id, 'is-running');
-        mark(element.id, 'is-done');
-      } else if (type === 'progress') {
-        badge(element, `${index}/${total}`);
-      }
-    },
-  };
+  const watcher = watch(provider);
+  state.diagram.clear();
+  state.diagram.frozen = true;
+  $('run').hidden = true;
+  $('stop').hidden = false;
+  say('running…');
 
-  await new Engine(processes, services).run(PROCESS_ID, {});
-  caption();
-  running = false;
-  $('run').disabled = false;
-  $('run').textContent = 'Run again';
-}
+  state.run = new Run({
+    study: state.study,
+    processes: state.processes,
+    processId: state.processId,
+    provider,
+    settings: readSettings(),
+    onEvent: watcher.onEvent,
+  });
 
-function light(ids) {
-  for (const scope of processes.values()) {
-    eachElement(scope, (el) => { if (ids.has(el.id)) mark(el.id, 'is-lit'); });
+  try {
+    await state.run.start();
+    say(`done · ${watcher.summary()}`);
+    openDrawer('result');
+  } catch (err) {
+    if (state.run.stopped) say('stopped');
+    else say(err.message, true);
+  } finally {
+    state.diagram.frozen = false;
+    state.diagram.caption();
+    $('run').hidden = false;
+    $('stop').hidden = true;
+    $('run').textContent = 'Run again';
   }
 }
 
-function unlight() {
-  for (const scope of processes.values()) eachElement(scope, (el) => unmark(el.id, 'is-lit'));
+const readSettings = () => Object.fromEntries(state.study.settings
+  .map(({ name }) => [name, Number($(`set-${name}`).value)]));
+
+function renderSettings() {
+  $('settings').innerHTML = state.study.settings.map(({ name, label, note, value, min, max, step }) => `
+    <label class="field" title="${note || ''}">
+      ${label}
+      <input type="range" id="set-${name}" min="${min}" max="${max}" step="${step || 1}" value="${value}"/>
+      <output id="out-${name}">${value}</output>
+    </label>`).join('');
+
+  for (const { name } of state.study.settings) {
+    $(`set-${name}`).oninput = ({ target }) => { $(`out-${name}`).textContent = target.value; };
+  }
 }
 
-function renderLegend() {
-  $('legend').innerHTML = Object.entries(PRIMITIVES)
-    .map(([name, p]) => `<span data-name="${name}"${p.model ? ' class="model"' : ''}>${p.label}</span>`)
-    .join('');
+async function open(entry) {
+  say('');
+  const loaded = await loadStudy(entry.id, (file) => text(`studies/${entry.id}/${file}`));
+  Object.assign(state, loaded, { run: null, picked: null });
 
-  $('legend').onmouseover = ({ target }) => {
-    const { name } = target.dataset;
-    if (!name || running) return;
-    const primitive = getPrimitive(name);
-    caption({ label: primitive.label, shape: generic(primitive), setting: primitive.note });
-    const ids = new Set();
-    for (const scope of processes.values()) {
-      eachElement(scope, (el) => { if (el.op?.name === name) ids.add(el.id); });
-    }
-    light(ids);
-  };
-  $('legend').onmouseout = () => {
-    if (running) return;
-    caption();
-    unlight();
-  };
+  $('question').textContent = state.study.question || '';
+  document.title = `${state.study.title} — analysis pipelines as BPMN`;
+
+  await state.diagram.show(state.xml, state.processes, state.model);
+  state.diagram.hint = 'Hover a box · click it for what it made · <b>Run</b> to compute';
+  state.diagram.caption();
+  renderLegend(state.diagram);
+  renderTypes(state.diagram, state.study, TYPES);
+  renderSettings();
+  $('run').textContent = 'Run';
+  if (!$('drawer').hidden) openDrawer(state.tab === 'model' ? 'model' : 'data');
+
+  const { problems } = state.model;
+  $('run').disabled = problems.length > 0;
+  if (problems.length) {
+    $('caption').innerHTML = problems.map((p) => `<div class="problem">${p}</div>`).join('');
+  }
 }
 
-/** The types this model names, the modeller's first and the constructors last. */
-function renderTypes() {
-  const order = Object.keys(TYPES);
-  const rank = (name) => (order.includes(name) ? order.indexOf(name) : order.length);
-  const used = [...model.mentions.keys()].sort((a, b) => rank(a) - rank(b));
-  $('types').innerHTML = used
-    .map((name) => `<span data-type="${name}">${name}</span>`)
-    .join('');
+async function boot() {
+  state.diagram = new Diagram($('canvas'), {
+    onPick: (id) => {
+      if (!state.model.info.has(id)) return;
+      state.picked = id;
+      state.diagram.select(id);
+      openDrawer('value');
+    },
+  });
 
-  $('types').onmouseover = ({ target }) => {
-    const name = target.dataset.type;
-    if (!name || running) return;
-    caption({ label: name, setting: TYPES[name] || '' });
-    light(model.mentions.get(name) || new Set());
-  };
-  $('types').onmouseout = () => {
-    if (running) return;
-    caption();
-    unlight();
-  };
+  const studies = JSON.parse(await text('studies/index.json'));
+  $('study').innerHTML = studies
+    .map(({ id, title }) => `<option value="${id}">${title}</option>`).join('');
+  $('study').onchange = () => open(studies.find((one) => one.id === $('study').value));
+
+  $('pace').oninput = ({ target }) => { $('pace-out').textContent = `${target.value} ms`; };
+  $('run').onclick = run;
+  $('stop').onclick = () => state.run?.stop();
+  $('browse').onclick = () => openDrawer('data');
+  $('model').onclick = () => openDrawer('model');
+  $('close').onclick = () => { $('drawer').hidden = true; state.diagram.select(null); };
+  for (const button of $('tabs').querySelectorAll('[data-tab]')) {
+    button.onclick = () => openDrawer(button.dataset.tab);
+  }
+
+  showChosen();
+  await open(studies[0]);
 }
 
-await loadDiagram();
-renderLegend();
-renderTypes();
-
-if (model.problems.length) {
-  $('caption').innerHTML = model.problems.map((p) => `<div class="problem">${p}</div>`).join('');
-  $('run').disabled = true;
-}
-$('run').onclick = () => run();
+boot().catch((err) => {
+  $('caption').innerHTML = `<div class="problem">${err.message}</div>`;
+  say('nothing loaded', true);
+});

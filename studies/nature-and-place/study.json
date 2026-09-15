@@ -1,0 +1,51 @@
+{
+  "id": "nature-and-place",
+  "title": "Themes and place",
+  "question": "Do the themes people name in an account depend on where the account was recorded?",
+  "about": "Fifty accounts of experiences in nature, and the setting each one was recorded in. The accounts are synthetic: each was written from a point near a Finnish town and seeded with themes according to whether that point was urban or rural, so there is a planted signal here that the pipeline either recovers or does not. Translated from the Finnish originals.",
+  "process": "process.bpmn",
+  "processId": "Process_Nature",
+  "sources": {
+    "accounts": "accounts.json",
+    "sites": "sites.json"
+  },
+  "scripted": "scripted.json",
+  "settings": [
+    {
+      "name": "sample_size",
+      "label": "Accounts read",
+      "value": 12,
+      "min": 4,
+      "max": 50,
+      "step": 2,
+      "note": "Every account costs two readings and one judgement per theme. Twelve is a few minutes on a real model; fifty is an hour."
+    }
+  ],
+  "types": {
+    "account": "one account of an experience in nature, as it was written",
+    "draft": "one free-form reading of one account",
+    "theme": "one short theme label",
+    "verdict": "whether one theme appears in one account",
+    "row": "one account, judged against every theme",
+    "site": "the setting an account was recorded in"
+  },
+  "shows": {
+    "accounts": {
+      "title": "id",
+      "body": "text"
+    },
+    "sites": {
+      "title": "id",
+      "fields": [
+        "setting",
+        "nearest_town",
+        "km_from_town"
+      ]
+    }
+  },
+  "chart": {
+    "of": "tested",
+    "title": "How often each theme appears, by setting",
+    "note": "Two accounts have no site record and drop out at the join."
+  }
+}
