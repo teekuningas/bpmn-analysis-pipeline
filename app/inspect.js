@@ -5,6 +5,7 @@
 // have to make writable.
 
 import { renderChart } from './chart.js';
+import { isText } from '../runtime/study.js';
 import { escape, short } from './html.js';
 
 function shape(type) {
@@ -57,6 +58,11 @@ const pairs = (items) => {
     </tr>`).join('')}</tbody></table></div>`;
 };
 
+// Writing, drawn as writing: one card each, open, because a summary that has to
+// be unfolded to be read is a summary nobody reads.
+const writings = (items) => `<ol class="cards">${items
+  .map((one) => `<li><p class="prose">${escape(String(one))}</p></li>`).join('')}</ol>`;
+
 const nested = (value, inner, study) => `<ol class="nest">${value
   .map((part) => `<li>${draw(part, inner, study)}</li>`).join('')}</ol>`;
 
@@ -76,6 +82,7 @@ function draw(value, type, study) {
     if (innerName === 'vector') return chips(value.map((v) => `${v.length} numbers`));
     if (innerName === 'pair') return pairs(value);
     if (innerName === 'finding') return '<div class="findings"></div>';
+    if (isText(study, innerName)) return writings(value);
     if (innerName === 'row') return `<ol class="cards">${value.map((one) => `<li>${row(one)}</li>`).join('')}</ol>`;
     if (typeof value[0] === 'object') return records(value);
     return chips(value);
@@ -85,6 +92,7 @@ function draw(value, type, study) {
   if (name === 'verdict') return verdicts([value]);
   if (name === 'judgement') return judgements([value]);
   if (name === 'vector') return `<p class="lede">${value.length} numbers</p>`;
+  if (isText(study, name)) return `<p class="prose">${escape(String(value))}</p>`;
   if (typeof value === 'string') return `<p class="prose">${escape(value)}</p>`;
   return `<pre>${escape(JSON.stringify(value, null, 1))}</pre>`;
 }
@@ -107,18 +115,26 @@ export function renderSources(container, study) {
   }).join('') || '<p class="empty">nothing to read</p>';
 }
 
+// Every call to a model, and only those: Read, Select, Combine, Join and Test
+// compute rather than ask, so they never appear here. The diagram is where those
+// are watched, and the Output panel is what they made.
 export function renderLog(container, calls) {
   if (!calls.length) {
-    container.innerHTML = '<p class="empty">No calls yet.</p>';
+    container.innerHTML = `<p class="empty">Nothing asked of a model yet.</p>
+      <p class="lede">Only <b>Generate</b> and <b>Embed</b> ask one. Click any box for what
+      it made.</p>`;
     return;
   }
   container.innerHTML = `<ol class="log">${calls.slice(-200).map((call) => `
     <li><details ${call.error ? 'open' : ''}>
-      <summary><code>${escape(call.element.id)}</code> ${call.error ? `<span class="bad">failed: ${escape(short(call.error, 60))}</span>` : escape(short(call.text, 70))}</summary>
-      <h4>instruction</h4><p class="prose">${escape(call.instruction)}</p>
+      <summary><code>${escape(call.element.id)}</code> ${call.error
+    ? `<span class="bad">failed: ${escape(short(call.error, 60))}</span>`
+    : (call.pending ? '<span class="waiting">asking…</span>' : escape(short(call.text, 70)))}</summary>
+      ${call.instruction ? `<h4>instruction</h4><p class="prose">${escape(call.instruction)}</p>` : ''}
       <h4>given</h4><pre>${escape(short(call.content, 1200))}</pre>
       ${call.thought ? `<h4>thought</h4><p class="thought">${escape(call.thought)}</p>` : ''}
       ${call.error ? `<h4>error</h4><p class="problem">${escape(call.error)}</p>` : ''}
-      <h4>replied</h4><pre>${escape(call.text || '(no reply)')}</pre>
+      <h4>replied</h4><pre>${call.pending
+    ? '<span class="waiting">still writing…</span>' : escape(call.text || '(no reply)')}</pre>
     </details></li>`).join('')}</ol>`;
 }

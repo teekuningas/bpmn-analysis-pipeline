@@ -32,8 +32,6 @@ body {
 
 header { padding: 18px 28px 6px; display: flex; align-items: baseline; gap: 14px; }
 header h1 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: .01em; white-space: nowrap; }
-header a { color: var(--faint); font-size: 13px; text-decoration: none; }
-header a:hover { color: var(--ink); }
 #question {
   flex: 1 1 auto; min-width: 0; font-size: 13px; color: var(--faint);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -41,8 +39,12 @@ header a:hover { color: var(--ink); }
 
 /* ------------------------------------------------------------------- shell */
 
-main { flex: 1 1 auto; min-height: 0; display: flex; }
-#canvas { flex: 1 1 auto; min-width: 0; }
+/* The drawer is a sibling of everything else rather than a column inside it, so
+   it runs the full height of the window: the header and the footer belong to the
+   diagram, and the panel is its own surface from top to bottom. */
+body { flex-direction: row; }
+#stage { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+#canvas { flex: 1 1 auto; min-height: 0; }
 
 #drawer {
   flex: 0 0 var(--drawer-width, min(460px, 46vw)); display: flex; flex-direction: column;
@@ -57,7 +59,7 @@ main { flex: 1 1 auto; min-height: 0; display: flex; }
 #drawer .resize-handle:hover, #drawer .resize-handle.dragging {
   background: var(--active); opacity: .25;
 }
-#tabs { display: flex; gap: 2px; padding: 10px 12px 0; border-bottom: 1px solid var(--hair); }
+#tabs { display: flex; gap: 2px; padding: 14px 12px 0; border-bottom: 1px solid var(--hair); }
 #tabs button {
   border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--faint);
   padding: 6px 10px; cursor: pointer; border-bottom: 2px solid transparent; border-radius: 0;
@@ -259,6 +261,20 @@ marker path, marker polyline, marker circle { fill: var(--line) !important; stro
   padding: 2px 9px; font-size: 12px;
 }
 ol.cards, ul.plain, ol.log, ol.nest { list-style: none; margin: 0; padding: 0; }
+/* A call that has been sent and not yet answered. On a model in the tab this is
+   where the Log spends most of its time, so it has to read as waiting and not as
+   nothing. */
+.waiting { color: var(--active); font-style: italic; }
+
+/* What llama.cpp said while it loaded. Folded away because it is long and
+   mostly routine, and kept because the one line that matters is in it. */
+.heard { margin-top: 4px; }
+.heard summary { cursor: pointer; color: var(--faint); font-size: 12px; }
+.heard pre {
+  margin: 6px 0 0; padding: 8px 10px; max-height: 220px; overflow: auto;
+  background: var(--paper); border: 1px solid var(--hair); border-radius: 4px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.5; white-space: pre-wrap;
+}
 ol.cards > li { padding: 5px 0; border-bottom: 1px solid var(--hair); }
 ol.nest > li { padding: 4px 0 4px 10px; border-left: 1px solid var(--hair); margin-bottom: 4px; }
 ul.plain > li { padding: 2px 0; display: flex; gap: 8px; align-items: baseline; }
@@ -333,11 +349,17 @@ table.grid th.turn span {
 }
 
 @media (max-width: 900px) {
-  main { flex-direction: column; }
-  /* flex-basis 0 plus min-height 0 is what lets the panel scroll instead of
-     pushing the footer off the screen. */
+  /* Stacked, so the drawer is below the diagram rather than beside it. flex-basis
+     0 plus min-height 0 is what lets the panel scroll instead of pushing the
+     footer off the screen. */
+  body { flex-direction: column; }
+  #stage { flex: 0 0 auto; }
   #canvas { flex: 0 0 34vh; }
-  #drawer { flex: 1 1 0; min-height: 0; border-left: 0; border-top: 1px solid var(--hair); }
+  #drawer {
+    flex: 1 1 0; min-height: 0; border-left: 0; border-top: 1px solid var(--hair);
+  }
+  #drawer .resize-handle { display: none; }
+  #tabs { padding: 10px 12px 0; }
 }
 
 @media (max-width: 620px) {

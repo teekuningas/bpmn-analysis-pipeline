@@ -29,8 +29,8 @@
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="read" resultVariable="accounts">
           <spiff:parameters>
-            <spiff:parameter id="gives" value="&apos;collection[account]&apos;"/>
-            <spiff:parameter id="source" value="&apos;accounts&apos;"/>
+            <spiff:parameter id="gives" value="'collection[account]'"/>
+            <spiff:parameter id="source" value="'accounts'"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -43,8 +43,8 @@
         <spiff:serviceTaskOperator id="select" resultVariable="sample">
           <spiff:parameters>
             <spiff:parameter id="of" value="accounts"/>
-            <spiff:parameter id="gives" value="&apos;collection[account]&apos;"/>
-            <spiff:parameter id="where" value="&apos;index &lt; sample_size&apos;"/>
+            <spiff:parameter id="gives" value="'collection[account]'"/>
+            <spiff:parameter id="where" value="'index &lt; sample_size'"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -80,37 +80,23 @@
             <spiff:serviceTaskOperator id="generate" resultVariable="draft">
               <spiff:parameters>
                 <spiff:parameter id="of" value="sample"/>
-                <spiff:parameter id="gives" value="&apos;draft&apos;"/>
-                <spiff:parameter id="prompt" value="&apos;Read this account and say in a few sentences what it is about. Name the themes you find in it.&apos;"/>
+                <spiff:parameter id="gives" value="'draft'"/>
+                <spiff:parameter id="prompt" value="'Read this account and say in a few sentences what it is about. Name the themes you find in it.'"/>
                 <spiff:parameter id="seed" value="index"/>
               </spiff:parameters>
             </spiff:serviceTaskOperator>
           </bpmn:extensionElements>
           <bpmn:incoming>p1</bpmn:incoming>
-          <bpmn:incoming>p_retry</bpmn:incoming>
           <bpmn:outgoing>p2</bpmn:outgoing>
         </bpmn:serviceTask>
-
-        <bpmn:boundaryEvent id="DraftFailed" attachedToRef="Draft" retries="3">
-          <bpmn:errorEventDefinition/>
-          <bpmn:outgoing>p_backoff</bpmn:outgoing>
-        </bpmn:boundaryEvent>
-
-        <bpmn:intermediateCatchEvent id="BackOff">
-          <bpmn:timerEventDefinition>
-            <bpmn:timeDuration>PT0.5S</bpmn:timeDuration>
-          </bpmn:timerEventDefinition>
-          <bpmn:incoming>p_backoff</bpmn:incoming>
-          <bpmn:outgoing>p_retry</bpmn:outgoing>
-        </bpmn:intermediateCatchEvent>
 
         <bpmn:serviceTask id="Structure" name="Generate">
           <bpmn:extensionElements>
             <spiff:serviceTaskOperator id="generate" resultVariable="codebook">
               <spiff:parameters>
                 <spiff:parameter id="of" value="draft"/>
-                <spiff:parameter id="gives" value="&apos;collection[theme]&apos;"/>
-                <spiff:parameter id="prompt" value="&apos;Write each theme in this reading as one short label, one per line. No numbering and no explanation.&apos;"/>
+                <spiff:parameter id="gives" value="'collection[theme]'"/>
+                <spiff:parameter id="prompt" value="'Write each theme in this reading as one short label, one per line. No numbering and no explanation.'"/>
               </spiff:parameters>
             </spiff:serviceTaskOperator>
           </bpmn:extensionElements>
@@ -121,8 +107,6 @@
         <bpmn:endEvent id="EndPass"><bpmn:incoming>p3</bpmn:incoming></bpmn:endEvent>
 
         <bpmn:sequenceFlow id="p1" sourceRef="StartPass" targetRef="Draft"/>
-        <bpmn:sequenceFlow id="p_backoff" sourceRef="DraftFailed" targetRef="BackOff"/>
-        <bpmn:sequenceFlow id="p_retry" sourceRef="BackOff" targetRef="Draft"/>
         <bpmn:sequenceFlow id="p2" sourceRef="Draft" targetRef="Structure"/>
         <bpmn:sequenceFlow id="p3" sourceRef="Structure" targetRef="EndPass"/>
       </bpmn:subProcess>
@@ -138,8 +122,8 @@
         <spiff:serviceTaskOperator id="combine" resultVariable="pooled">
           <spiff:parameters>
             <spiff:parameter id="parts" value="all_readings"/>
-            <spiff:parameter id="gives" value="&apos;collection[theme]&apos;"/>
-            <spiff:parameter id="how" value="&apos;distinct&apos;"/>
+            <spiff:parameter id="gives" value="'collection[theme]'"/>
+            <spiff:parameter id="how" value="'distinct'"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -164,7 +148,7 @@
           <spiff:serviceTaskOperator id="embed" resultVariable="place">
             <spiff:parameters>
               <spiff:parameter id="of" value="pooled"/>
-              <spiff:parameter id="gives" value="&apos;vector&apos;"/>
+              <spiff:parameter id="gives" value="'vector'"/>
             </spiff:parameters>
           </spiff:serviceTaskOperator>
         </bpmn:extensionElements>
@@ -184,8 +168,8 @@
           <spiff:parameters>
             <spiff:parameter id="parts" value="places"/>
             <spiff:parameter id="with" value="pooled"/>
-            <spiff:parameter id="gives" value="&apos;collection[pair[theme, theme]]&apos;"/>
-            <spiff:parameter id="how" value="&apos;nearest&apos;"/>
+            <spiff:parameter id="gives" value="'collection[pair[theme, theme]]'"/>
+            <spiff:parameter id="how" value="'nearest'"/>
             <spiff:parameter id="by" value="pairs_per_round"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
@@ -211,9 +195,9 @@
           <spiff:serviceTaskOperator id="generate" resultVariable="judgement">
             <spiff:parameters>
               <spiff:parameter id="of" value="candidates"/>
-              <spiff:parameter id="labels" value="&apos;THEME A|THEME B&apos;"/>
-              <spiff:parameter id="gives" value="&apos;judgement&apos;"/>
-              <spiff:parameter id="prompt" value="&apos;Are these two the same concept? Say no if either is broader than the other, or names a different side of the same subject. If they are the same, give the clearer of the two wordings.&apos;"/>
+              <spiff:parameter id="labels" value="'THEME A|THEME B'"/>
+              <spiff:parameter id="gives" value="'judgement'"/>
+              <spiff:parameter id="prompt" value="'Are these two the same concept? Say no if either is broader than the other, or names a different side of the same subject. If they are the same, give the clearer of the two wordings.'"/>
             </spiff:parameters>
           </spiff:serviceTaskOperator>
         </bpmn:extensionElements>
@@ -233,8 +217,8 @@
           <spiff:parameters>
             <spiff:parameter id="parts" value="judgements"/>
             <spiff:parameter id="with" value="pooled"/>
-            <spiff:parameter id="gives" value="&apos;collection[theme]&apos;"/>
-            <spiff:parameter id="how" value="&apos;merge&apos;"/>
+            <spiff:parameter id="gives" value="'collection[theme]'"/>
+            <spiff:parameter id="how" value="'merge'"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -253,8 +237,8 @@
         <spiff:serviceTaskOperator id="combine" resultVariable="themes">
           <spiff:parameters>
             <spiff:parameter id="parts" value="pooled"/>
-            <spiff:parameter id="gives" value="&apos;collection[theme]&apos;"/>
-            <spiff:parameter id="how" value="&apos;distinct&apos;"/>
+            <spiff:parameter id="gives" value="'collection[theme]'"/>
+            <spiff:parameter id="how" value="'distinct'"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -266,8 +250,8 @@
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="read" resultVariable="sites">
           <spiff:parameters>
-            <spiff:parameter id="gives" value="&apos;collection[site]&apos;"/>
-            <spiff:parameter id="source" value="&apos;sites&apos;"/>
+            <spiff:parameter id="gives" value="'collection[site]'"/>
+            <spiff:parameter id="source" value="'sites'"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -298,9 +282,9 @@
           <spiff:serviceTaskOperator id="generate" resultVariable="verdict">
             <spiff:parameters>
               <spiff:parameter id="of" value="[sample, themes]"/>
-              <spiff:parameter id="labels" value="&apos;ACCOUNT|THEME&apos;"/>
-              <spiff:parameter id="gives" value="&apos;verdict&apos;"/>
-              <spiff:parameter id="prompt" value="&apos;Does this theme appear in this account? Answer YES or NO, then one short sentence saying why.&apos;"/>
+              <spiff:parameter id="labels" value="'ACCOUNT|THEME'"/>
+              <spiff:parameter id="gives" value="'verdict'"/>
+              <spiff:parameter id="prompt" value="'Does this theme appear in this account? Answer YES or NO, then one short sentence saying why.'"/>
             </spiff:parameters>
           </spiff:serviceTaskOperator>
         </bpmn:extensionElements>
@@ -319,8 +303,8 @@
             <spiff:parameters>
               <spiff:parameter id="parts" value="verdicts"/>
               <spiff:parameter id="with" value="sample"/>
-              <spiff:parameter id="gives" value="&apos;row&apos;"/>
-              <spiff:parameter id="how" value="&apos;row&apos;"/>
+              <spiff:parameter id="gives" value="'row'"/>
+              <spiff:parameter id="how" value="'row'"/>
             </spiff:parameters>
           </spiff:serviceTaskOperator>
         </bpmn:extensionElements>
@@ -341,8 +325,8 @@
           <spiff:parameters>
             <spiff:parameter id="left" value="rows"/>
             <spiff:parameter id="right" value="sites"/>
-            <spiff:parameter id="gives" value="&apos;collection[pair[row, site]]&apos;"/>
-            <spiff:parameter id="on" value="&apos;id&apos;"/>
+            <spiff:parameter id="gives" value="'collection[pair[row, site]]'"/>
+            <spiff:parameter id="on" value="'id'"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -355,9 +339,9 @@
         <spiff:serviceTaskOperator id="test" resultVariable="tested">
           <spiff:parameters>
             <spiff:parameter id="of" value="joined"/>
-            <spiff:parameter id="gives" value="&apos;collection[finding]&apos;"/>
-            <spiff:parameter id="by" value="&apos;setting&apos;"/>
-            <spiff:parameter id="test" value="&apos;each theme against the setting, corrected for many tests&apos;"/>
+            <spiff:parameter id="gives" value="'collection[finding]'"/>
+            <spiff:parameter id="by" value="'setting'"/>
+            <spiff:parameter id="test" value="'each theme against the setting, corrected for many tests'"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -370,8 +354,8 @@
         <spiff:serviceTaskOperator id="select" resultVariable="findings">
           <spiff:parameters>
             <spiff:parameter id="of" value="tested"/>
-            <spiff:parameter id="gives" value="&apos;collection[finding]&apos;"/>
-            <spiff:parameter id="where" value="&apos;item.q &lt; 0.05&apos;"/>
+            <spiff:parameter id="gives" value="'collection[finding]'"/>
+            <spiff:parameter id="where" value="'item.q &lt; 0.05'"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
@@ -437,31 +421,25 @@
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="s_PerAccount" bpmnElement="PerAccount" isExpanded="true">
-        <dc:Bounds x="570" y="120" width="640" height="320"/>
+        <dc:Bounds x="570" y="120" width="640" height="260"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_StartAccount" bpmnElement="StartAccount">
         <dc:Bounds x="600" y="232" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_PerPass" bpmnElement="PerPass" isExpanded="true">
-        <dc:Bounds x="665" y="160" width="440" height="240"/>
+        <dc:Bounds x="665" y="160" width="440" height="180"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_StartPass" bpmnElement="StartPass">
-        <dc:Bounds x="690" y="232" width="36" height="36"/>
+        <dc:Bounds x="695" y="232" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Draft" bpmnElement="Draft">
-        <dc:Bounds x="750" y="210" width="110" height="80"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_DraftFailed" bpmnElement="DraftFailed">
-        <dc:Bounds x="832" y="272" width="36" height="36"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_BackOff" bpmnElement="BackOff">
-        <dc:Bounds x="832" y="332" width="36" height="36"/>
+        <dc:Bounds x="760" y="210" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Structure" bpmnElement="Structure">
-        <dc:Bounds x="920" y="210" width="110" height="80"/>
+        <dc:Bounds x="900" y="210" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_EndPass" bpmnElement="EndPass">
-        <dc:Bounds x="1050" y="232" width="36" height="36"/>
+        <dc:Bounds x="1039" y="232" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_EndAccount" bpmnElement="EndAccount">
         <dc:Bounds x="1140" y="232" width="36" height="36"/>
@@ -474,19 +452,19 @@
 
 
       <bpmndi:BPMNShape id="s_note7" bpmnElement="note7">
-        <dc:Bounds x="530" y="450" width="290" height="70"/>
+        <dc:Bounds x="560" y="560" width="250" height="70"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_PerTheme" bpmnElement="PerTheme" isExpanded="true">
         <dc:Bounds x="1100" y="450" width="320" height="140"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_StartPlace" bpmnElement="StartPlace">
-        <dc:Bounds x="1125" y="502" width="36" height="36"/>
+        <dc:Bounds x="1135" y="502" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Place" bpmnElement="Place">
-        <dc:Bounds x="1185" y="480" width="110" height="80"/>
+        <dc:Bounds x="1205" y="480" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_EndPlace" bpmnElement="EndPlace">
-        <dc:Bounds x="1330" y="502" width="36" height="36"/>
+        <dc:Bounds x="1349" y="502" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Nearest" bpmnElement="Nearest">
         <dc:Bounds x="1240" y="620" width="110" height="80"/>
@@ -495,13 +473,13 @@
         <dc:Bounds x="1100" y="730" width="320" height="140"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_StartPair" bpmnElement="StartPair">
-        <dc:Bounds x="1125" y="782" width="36" height="36"/>
+        <dc:Bounds x="1135" y="782" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Judge" bpmnElement="Judge">
-        <dc:Bounds x="1185" y="760" width="110" height="80"/>
+        <dc:Bounds x="1205" y="760" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_EndPair" bpmnElement="EndPair">
-        <dc:Bounds x="1330" y="782" width="36" height="36"/>
+        <dc:Bounds x="1349" y="782" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Settle" bpmnElement="Settle">
         <dc:Bounds x="950" y="760" width="110" height="80"/>
@@ -524,16 +502,16 @@
         <dc:Bounds x="560" y="860" width="420" height="200"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_StartScored" bpmnElement="StartScored">
-        <dc:Bounds x="585" y="922" width="36" height="36"/>
+        <dc:Bounds x="586" y="922" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Score" bpmnElement="Score">
-        <dc:Bounds x="650" y="900" width="110" height="80"/>
+        <dc:Bounds x="647" y="900" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_RowUp" bpmnElement="RowUp">
-        <dc:Bounds x="790" y="900" width="110" height="80"/>
+        <dc:Bounds x="783" y="900" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_EndScored" bpmnElement="EndScored">
-        <dc:Bounds x="925" y="922" width="36" height="36"/>
+        <dc:Bounds x="918" y="922" width="36" height="36"/>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="s_WithContext" bpmnElement="WithContext">
@@ -556,7 +534,7 @@
         <dc:Bounds x="360" y="56" width="300" height="60"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_note2" bpmnElement="note2">
-        <dc:Bounds x="900" y="610" width="300" height="70"/>
+        <dc:Bounds x="900" y="620" width="300" height="70"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_note4" bpmnElement="note4">
         <dc:Bounds x="240" y="660" width="290" height="56"/>
@@ -584,19 +562,13 @@
         <di:waypoint x="636" y="250"/><di:waypoint x="665" y="250"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_p1" bpmnElement="p1">
-        <di:waypoint x="726" y="250"/><di:waypoint x="750" y="250"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_p_backoff" bpmnElement="p_backoff">
-        <di:waypoint x="850" y="308"/><di:waypoint x="850" y="332"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_p_retry" bpmnElement="p_retry">
-        <di:waypoint x="832" y="350"/><di:waypoint x="780" y="350"/><di:waypoint x="780" y="290"/>
+        <di:waypoint x="731" y="250"/><di:waypoint x="760" y="250"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_p2" bpmnElement="p2">
-        <di:waypoint x="860" y="250"/><di:waypoint x="920" y="250"/>
+        <di:waypoint x="870" y="250"/><di:waypoint x="900" y="250"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_p3" bpmnElement="p3">
-        <di:waypoint x="1030" y="250"/><di:waypoint x="1050" y="250"/>
+        <di:waypoint x="1010" y="250"/><di:waypoint x="1039" y="250"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_d2" bpmnElement="d2">
         <di:waypoint x="1105" y="250"/><di:waypoint x="1140" y="250"/>
@@ -608,10 +580,10 @@
         <di:waypoint x="1355" y="290"/><di:waypoint x="1355" y="450"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_e1" bpmnElement="e1">
-        <di:waypoint x="1161" y="520"/><di:waypoint x="1185" y="520"/>
+        <di:waypoint x="1171" y="520"/><di:waypoint x="1205" y="520"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_e2" bpmnElement="e2">
-        <di:waypoint x="1295" y="520"/><di:waypoint x="1330" y="520"/>
+        <di:waypoint x="1315" y="520"/><di:waypoint x="1349" y="520"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f5b" bpmnElement="f5b">
         <di:waypoint x="1295" y="590"/><di:waypoint x="1295" y="620"/>
@@ -620,10 +592,10 @@
         <di:waypoint x="1295" y="700"/><di:waypoint x="1295" y="730"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_j1" bpmnElement="j1">
-        <di:waypoint x="1161" y="800"/><di:waypoint x="1185" y="800"/>
+        <di:waypoint x="1171" y="800"/><di:waypoint x="1205" y="800"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_j2" bpmnElement="j2">
-        <di:waypoint x="1295" y="800"/><di:waypoint x="1330" y="800"/>
+        <di:waypoint x="1315" y="800"/><di:waypoint x="1349" y="800"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f5d" bpmnElement="f5d">
         <di:waypoint x="1100" y="800"/><di:waypoint x="1060" y="800"/>
@@ -632,8 +604,8 @@
         <di:waypoint x="950" y="800"/><di:waypoint x="910" y="800"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f_back" bpmnElement="f_back">
-        <di:waypoint x="885" y="775"/><di:waypoint x="885" y="445"/>
-        <di:waypoint x="1180" y="445"/><di:waypoint x="1180" y="450"/>
+        <di:waypoint x="885" y="775"/><di:waypoint x="885" y="520"/>
+        <di:waypoint x="1100" y="520"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f6" bpmnElement="f6">
         <di:waypoint x="860" y="800"/><di:waypoint x="820" y="800"/>
@@ -643,10 +615,11 @@
         <di:waypoint x="725" y="720"/><di:waypoint x="725" y="755"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_a_note2" bpmnElement="a_note2">
-        <di:waypoint x="1240" y="655"/><di:waypoint x="1200" y="650"/>
+        <di:waypoint x="1240" y="655"/><di:waypoint x="1200" y="655"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_a_note7" bpmnElement="a_note7">
-        <di:waypoint x="862" y="783"/><di:waypoint x="820" y="520"/>
+        <di:waypoint x="860" y="790"/><di:waypoint x="840" y="790"/>
+        <di:waypoint x="840" y="595"/><di:waypoint x="810" y="595"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f7" bpmnElement="f7">
         <di:waypoint x="225" y="275"/><di:waypoint x="225" y="780"/>
@@ -659,13 +632,13 @@
         <di:waypoint x="725" y="805"/><di:waypoint x="725" y="860"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_s1" bpmnElement="s1">
-        <di:waypoint x="621" y="940"/><di:waypoint x="650" y="940"/>
+        <di:waypoint x="622" y="940"/><di:waypoint x="647" y="940"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_s2" bpmnElement="s2">
-        <di:waypoint x="760" y="940"/><di:waypoint x="790" y="940"/>
+        <di:waypoint x="757" y="940"/><di:waypoint x="783" y="940"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_s3" bpmnElement="s3">
-        <di:waypoint x="900" y="940"/><di:waypoint x="925" y="940"/>
+        <di:waypoint x="893" y="940"/><di:waypoint x="918" y="940"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f11" bpmnElement="f11">
         <di:waypoint x="980" y="940"/><di:waypoint x="1030" y="940"/>

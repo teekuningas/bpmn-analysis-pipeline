@@ -123,9 +123,13 @@ export class Engine {
       if (over && Array.isArray(source)) scoped[over[1]] = source[index];
       if (outputRef && sequential) scoped[outputRef] = collected;
 
+      // Said before the instance runs, not after it: "3 of 4" should mean the
+      // third one is being worked on. Fired afterwards it names the last one
+      // that finished, so a loop in the middle of its third instance reads as
+      // two — which is the count a watcher least wants.
+      await this.services.onEvent({ type: 'progress', element: el, index: index + 1, total });
       const result = await this.executeBody(el, scoped);
       if (outputRef) collected.push(outputItem ? scoped[outputItem] : result);
-      await this.services.onEvent({ type: 'progress', element: el, index: index + 1, total });
       if (until && evaluate(until, scoped)) break;
     }
   }

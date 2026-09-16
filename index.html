@@ -9,41 +9,42 @@
 <link rel="stylesheet" href="app/theme.css"/>
 </head>
 <body>
-<header>
-  <h1>Analysis pipelines as BPMN</h1>
-  <select id="study" aria-label="Which analysis"></select>
-  <span id="question"></span>
-  <a href="https://github.com/teekuningas/bpmn-analysis-pipeline">source</a>
-</header>
 
-<main>
+<main id="stage">
+  <header>
+    <h1>Analysis pipelines as BPMN</h1>
+    <select id="study" aria-label="Which analysis"></select>
+    <span id="question"></span>
+  </header>
+
   <div id="canvas"></div>
-  <aside id="drawer">
-    <div class="resize-handle" id="resize"></div>
-    <nav id="tabs">
-      <button type="button" data-tab="data">Data</button>
-      <button type="button" data-tab="value">Output</button>
-      <button type="button" data-tab="log">Log</button>
-      <button type="button" data-tab="setup" class="apart" title="Model and settings">Setup</button>
-      <button type="button" id="close" aria-label="Close">×</button>
-    </nav>
-    <div id="panel"></div>
-  </aside>
+
+  <footer>
+    <div id="caption"></div>
+    <div id="legend"></div>
+    <div id="types"></div>
+
+    <div id="controls">
+      <button type="button" id="run">Run</button>
+      <button type="button" id="stop" hidden>Stop</button>
+    </div>
+    <div id="hint"></div>
+
+    <div id="progress"></div>
+  </footer>
 </main>
 
-<footer>
-  <div id="caption"></div>
-  <div id="legend"></div>
-  <div id="types"></div>
-
-  <div id="controls">
-    <button type="button" id="run">Run</button>
-    <button type="button" id="stop" hidden>Stop</button>
-  </div>
-  <div id="hint"></div>
-
-  <div id="progress"></div>
-</footer>
+<aside id="drawer">
+  <div class="resize-handle" id="resize"></div>
+  <nav id="tabs">
+    <button type="button" data-tab="data">Data</button>
+    <button type="button" data-tab="value">Output</button>
+    <button type="button" data-tab="log">Log</button>
+    <button type="button" data-tab="setup" class="apart" title="Model and settings">Setup</button>
+    <button type="button" id="close" aria-label="Close">×</button>
+  </nav>
+  <div id="panel"></div>
+</aside>
 
 <script src="vendor/bpmn-navigated-viewer.js"></script>
 <script type="module" src="app/ui.js"></script>

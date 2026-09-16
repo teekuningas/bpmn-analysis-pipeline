@@ -9,6 +9,7 @@ import { Diagram, renderLegend, renderTypes } from './diagram.js';
 import { renderValue, renderSources, renderLog } from './inspect.js';
 import {
   renderSetup, providerFor, chosen, ensureModel, ready, loadFailed, firstCost,
+  startingSettings, workerTrouble,
 } from './model.js';
 
 const $ = (id) => document.getElementById(id);
@@ -23,8 +24,9 @@ const state = {
   diagram: null, study: null, xml: null, processes: null, processId: null,
   model: null, run: null, picked: null, tab: 'data',
   // Every knob lives here rather than in the DOM, so the panel they are drawn in
-  // can be closed without the run losing them.
-  settings: { pace: 150 },
+  // can be closed without the run losing them. Opening a study fills it in from
+  // the study and the way of answering that is picked.
+  settings: {},
 };
 
 const say = (message, bad = false) => {
@@ -52,11 +54,13 @@ function drawPanel() {
   return drawValue(panel);
 }
 
+// What the run was for. A study names it — `result`, or the chart's `of` — and
+// it is either what a box gave or what a loop collected.
 function findResultElement() {
   let found = null;
-  const targetVar = state.study?.chart?.of;
+  const targetVar = state.study?.result || state.study?.chart?.of;
   state.diagram.each((el) => {
-    if (el.op?.resultVariable === targetVar) found = el;
+    if (el.op?.resultVariable === targetVar || el.loop?.outputRef === targetVar) found = el;
   });
   if (!found) {
     state.diagram.each((el) => {
@@ -101,21 +105,62 @@ const showRun = () => {
   $('run').title = `using ${chosen()}`;
   // The first Run on a real model fetches gigabytes. Saying so under the button
   // is the difference between waiting and wondering.
-  $('hint').innerHTML = firstCost() ? `first run fetches the model · ${firstCost()}` : '';
+  $('hint').innerHTML = firstCost() ? `first run fetches the models · ${firstCost()}` : '';
 };
 
 const hold = () => new Promise((resolve) => setTimeout(resolve, state.settings.pace || 0));
 
-function watch(provider) {
+/** A few seconds after Stop was pressed, give up waiting. Stopping aborts the
+ *  call in flight, which is enough whenever the worker is alive to hear it; a
+ *  worker that has died rejects nothing, and without a deadline the page would
+ *  wait on that promise for as long as it stayed open. */
+function deadline(run) {
+  let late = false;
+  let poll = null;
+  const reached = new Promise((resolve) => {
+    poll = setInterval(() => {
+      if (!run.stopped) return;
+      clearInterval(poll);
+      setTimeout(() => { late = true; resolve(); }, 4000);
+    }, 200);
+  });
+  return { reached, late: () => late, clear: () => clearInterval(poll) };
+}
+
+function watch() {
   const started = Date.now();
   let calls = 0;
+  let asking = null;
+  let ticker = null;
   const elapsed = () => Math.round((Date.now() - started) / 1000);
 
+  // While a call is in flight the line counts up. A model in the tab can
+  // legitimately take minutes, and the only way to tell that from wedged is to
+  // be told how long it has been — "asking" on its own looks the same either way.
+  const tick = () => {
+    const waited = Math.round((Date.now() - asking) / 1000);
+    const trouble = workerTrouble();
+    say(`${calls} call${calls === 1 ? '' : 's'} · asking for ${waited}s`
+      + `${trouble ? ` · the model said: ${trouble}` : ''}`,
+    Boolean(trouble) || waited > 300);
+  };
+
+  const stopTicking = () => {
+    clearInterval(ticker);
+    ticker = null;
+    asking = null;
+  };
+
   return {
-    summary: () => `${calls} calls in ${elapsed()}s · ${provider.hits} cached`,
-    onEvent: ({ type, element, index, total, attempt, error }) => {
+    done: stopTicking,
+    summary: () => `${calls} calls in ${elapsed()}s`,
+    onEvent: ({ type, element, index, total, attempt, error, call }) => {
       if (type === 'enter') {
         state.diagram.mark(element.id, element.scope ? 'is-running' : 'is-active');
+        // A nested loop is entered once per instance of the loop around it, and
+        // its badge would otherwise still read the last count of the previous
+        // one until this one's first instance starts.
+        if (element.loop) state.diagram.badge(element.id, '');
         state.diagram.describe(element.id);
         return hold();
       }
@@ -132,8 +177,16 @@ function watch(provider) {
         say(`${element.id} failed (${reason}) — attempt ${attempt}`, true);
         if (state.tab === 'log') drawPanel();
       } else if (type === 'call') {
-        calls += 1;
-        say(`${calls} calls · ${elapsed()}s · ${provider.hits} cached`);
+        // Counted when it settles, so the number is answers and not questions.
+        if (call.pending) {
+          asking = Date.now();
+          ticker ??= setInterval(tick, 1000);
+          tick();
+        } else {
+          calls += 1;
+          stopTicking();
+          say(`${calls} call${calls === 1 ? '' : 's'} · ${elapsed()}s`);
+        }
         if (state.tab === 'log') drawPanel();
       }
       return new Promise((resolve) => setTimeout(resolve, 0));
@@ -166,7 +219,7 @@ async function run() {
   let provider;
   try { provider = providerFor(state.study); } catch (err) { say(err.message, true); return; }
 
-  const watcher = watch(provider);
+  const watcher = watch();
   state.diagram.clear();
   state.diagram.frozen = true;
   say('running…');
@@ -180,8 +233,10 @@ async function run() {
     onEvent: watcher.onEvent,
   });
 
+  const giveUp = deadline(state.run);
   try {
-    await state.run.start();
+    await Promise.race([state.run.start(), giveUp.reached]);
+    if (state.run.stopped) throw new Error('stopped');
     say(`done · ${watcher.summary()}`);
     const resEl = findResultElement();
     if (resEl) {
@@ -190,9 +245,12 @@ async function run() {
     }
     openDrawer('value');
   } catch (err) {
-    if (state.run.stopped) say('stopped');
+    if (giveUp.late()) say('the model never answered and did not stop — reload the page', true);
+    else if (state.run.stopped) say('stopped');
     else say(err.message, true);
   } finally {
+    watcher.done();
+    giveUp.clear();
     state.diagram.frozen = false;
     state.diagram.hint = 'Click any box to inspect its output';
     state.diagram.caption();
@@ -215,7 +273,7 @@ async function open(entry) {
   state.diagram.caption();
   renderLegend(state.diagram);
   renderTypes(state.diagram, state.study, TYPES);
-  for (const { name, value } of state.study.settings) state.settings[name] = value;
+  state.settings = startingSettings(state.study);
   showRun();
   openDrawer(state.tab === 'setup' ? 'setup' : 'data');
 
@@ -259,6 +317,11 @@ async function boot() {
     if (event.reason?.name === 'AbortError') event.preventDefault();
   });
 
+  // Replies used to be remembered here. They are not any more, and a browser
+  // that ran the older page is still holding megabytes of them with nothing left
+  // to clear it.
+  try { localStorage.removeItem('bpmn-analysis-pipeline/replies'); } catch { /* denied */ }
+
 
   state.diagram = new Diagram($('canvas'), {
     onPick: (id) => {
@@ -275,7 +338,10 @@ async function boot() {
   $('study').onchange = () => open(studies.find((one) => one.id === $('study').value));
 
   $('run').onclick = run;
-  $('stop').onclick = () => state.run?.stop();
+  $('stop').onclick = () => {
+    state.run?.stop();
+    say('stopping…');
+  };
   $('close').onclick = () => { $('drawer').hidden = true; state.diagram.select(null); };
   for (const button of $('tabs').querySelectorAll('[data-tab]')) {
     button.onclick = () => openDrawer(button.dataset.tab);

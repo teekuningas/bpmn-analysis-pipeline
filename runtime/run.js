@@ -14,9 +14,15 @@ export class Run {
     this.calls = [];
     this.stopped = false;
     this.data = null;
+    // Stopping between steps is not stopping when one step is minutes long, so
+    // the run carries a signal the provider can be interrupted by.
+    this.halt = new AbortController();
   }
 
-  stop() { this.stopped = true; }
+  stop() {
+    this.stopped = true;
+    this.halt.abort();
+  }
 
   /** What a box produced: what its loop collected, or what its last call gave. */
   valueOf(id) {
@@ -43,8 +49,12 @@ export class Run {
           study: this.study,
           provider: this.provider,
           settings: this.settings,
+          signal: this.halt.signal,
+          // A call is logged when it is sent and again when it settles, and it
+          // is the same object both times — so it is kept once and the event is
+          // what says something changed.
           log: (call) => {
-            this.calls.push(call);
+            if (!this.calls.includes(call)) this.calls.push(call);
             this.onEvent({ type: 'call', element, call });
           },
         });
@@ -65,12 +75,8 @@ export class Run {
   }
 
   async start() {
-    try {
-      this.data = await new Engine(this.processes, this.services())
-        .run(this.processId, { ...this.settings });
-      return this.data;
-    } finally {
-      this.provider.flush?.();
-    }
+    this.data = await new Engine(this.processes, this.services())
+      .run(this.processId, { ...this.settings });
+    return this.data;
   }
 }

@@ -160,7 +160,13 @@ export function renderLegend(diagram) {
 }
 
 export function renderTypes(diagram, study, vocabularyTypes) {
-  const known = { ...vocabularyTypes, ...(study.types || {}) };
+  // The vocabulary describes its own types with a sentence; a study declares
+  // its own as `{ about, is }`, so both arrive here as prose to show.
+  const known = {
+    ...vocabularyTypes,
+    ...Object.fromEntries(Object.entries(study.types || {})
+      .map(([name, one]) => [name, one.about || 'named by this study'])),
+  };
   const order = Object.keys(study.types || {}).concat(Object.keys(vocabularyTypes));
   const rank = (name) => (order.includes(name) ? order.indexOf(name) : order.length);
   const used = [...diagram.model.mentions.keys()].sort((a, b) => rank(a) - rank(b));

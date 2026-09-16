@@ -144,6 +144,137 @@ def check_geometry(doc, process, problems):
                     problems.append(f'geometry: annotation "{note}" overlaps "{other}"')
 
 
+def segments(edge):
+    points = [(float(w.getAttribute('x')), float(w.getAttribute('y')))
+              for w in edge.getElementsByTagName('di:waypoint')]
+    return list(zip(points, points[1:]))
+
+
+def crosses(segment, box):
+    """Does a straight segment pass through a rectangle's interior?
+
+    Liang-Barsky: clip the segment against each of the four edges and see
+    whether any of it survives. Written for the general case rather than as an
+    interval test per axis, because a vertical line has no width and an
+    interval test on x quietly answers no. A line running exactly along an edge
+    grazes rather than crosses, and `q <= 0` is what says so.
+    """
+    (x1, y1), (x2, y2) = segment
+    bx, by, bw, bh = box
+    dx, dy = x2 - x1, y2 - y1
+    lo, hi = 0.0, 1.0
+    for p, q in ((-dx, x1 - bx), (dx, bx + bw - x1), (-dy, y1 - by), (dy, by + bh - y1)):
+        if p == 0:
+            if q <= 0:
+                return False
+            continue
+        t = q / p
+        if p < 0:
+            lo = max(lo, t)
+        else:
+            hi = min(hi, t)
+    return lo < hi
+
+
+def check_routing(doc, problems):
+    """A line should not run through a box it has nothing to do with.
+
+    Containers are exempt: an edge inside a sub-process is meant to be inside
+    it, and an annotation's leader is meant to reach out of one.
+    """
+    box = boxes(doc)
+    contains = {s.getAttribute('bpmnElement') for s in doc.getElementsByTagName('bpmndi:BPMNShape')
+                if s.getAttribute('isExpanded') == 'true'}
+    ends = {}
+    for kind in ('sequenceFlow', 'association'):
+        for line in doc.getElementsByTagNameNS(BPMN, kind):
+            ends[line.getAttribute('id')] = {line.getAttribute('sourceRef'),
+                                             line.getAttribute('targetRef')}
+
+    for edge in doc.getElementsByTagName('bpmndi:BPMNEdge'):
+        line = edge.getAttribute('bpmnElement')
+        joined = ends.get(line, set())
+        for segment in segments(edge):
+            for eid, bounds in box.items():
+                if eid in joined or eid in contains:
+                    continue
+                if crosses(segment, bounds):
+                    problems.append(f'routing: "{line}" runs through "{eid}"')
+
+
+def on_edge(point, box, slack=1.0):
+    """Is a point on the boundary of a rectangle?"""
+    px, py = point
+    bx, by, bw, bh = box
+    within_x = bx - slack <= px <= bx + bw + slack
+    within_y = by - slack <= py <= by + bh + slack
+    touches_x = abs(px - bx) <= slack or abs(px - (bx + bw)) <= slack
+    touches_y = abs(py - by) <= slack or abs(py - (by + bh)) <= slack
+    return (within_x and within_y) and (touches_x or touches_y)
+
+
+def check_lines(doc, problems):
+    """Diagram hygiene the eye is bad at and a reader notices anyway.
+
+    Three rules, each of which has been broken here by hand at least once:
+    a line starts and ends *on* the shapes it joins; every segment runs square;
+    and no segment is a stub too short to read as anything but a hook.
+    """
+    box = boxes(doc)
+    ends = {}
+    for kind in ('sequenceFlow', 'association'):
+        for line in doc.getElementsByTagNameNS(BPMN, kind):
+            ends[line.getAttribute('id')] = (line.getAttribute('sourceRef'),
+                                             line.getAttribute('targetRef'))
+
+    for edge in doc.getElementsByTagName('bpmndi:BPMNEdge'):
+        line = edge.getAttribute('bpmnElement')
+        points = [(float(w.getAttribute('x')), float(w.getAttribute('y')))
+                  for w in edge.getElementsByTagName('di:waypoint')]
+        if len(points) < 2:
+            problems.append(f'lines: "{line}" has fewer than two waypoints')
+            continue
+
+        source, target = ends.get(line, (None, None))
+        for end, eid, point in (('starts', source, points[0]), ('ends', target, points[-1])):
+            if eid in box and not on_edge(point, box[eid]):
+                problems.append(f'lines: "{line}" {end} at {point[0]:.0f},{point[1]:.0f}, '
+                                f'which is not on the edge of "{eid}"')
+
+        for one, two in zip(points, points[1:]):
+            if one[0] != two[0] and one[1] != two[1]:
+                problems.append(f'lines: "{line}" has a diagonal segment '
+                                f'{one[0]:.0f},{one[1]:.0f} to {two[0]:.0f},{two[1]:.0f}')
+            elif abs(one[0] - two[0]) + abs(one[1] - two[1]) < 10:
+                problems.append(f'lines: "{line}" has a stub segment shorter than 10px '
+                                f'at {one[0]:.0f},{one[1]:.0f}')
+
+
+def check_sizes(doc, problems):
+    """One size per kind of thing. A task drawn 4px wider than its neighbour is
+    invisible alone and reads as sloppiness in a row of six."""
+    kinds = {}
+    for node in doc.getElementsByTagNameNS(BPMN, '*'):
+        if is_element(node) and node.localName != 'subProcess':
+            kinds[node.getAttribute('id')] = node.localName
+    kind_of = {k: ('event' if v.endswith('Event') else
+                   'gateway' if v.endswith('Gateway') else 'task')
+               for k, v in kinds.items()}
+
+    seen = {}
+    for eid, (_, _, w, h) in boxes(doc).items():
+        kind = kind_of.get(eid)
+        if not kind:
+            continue
+        seen.setdefault(kind, {}).setdefault((w, h), []).append(eid)
+
+    for kind, sizes in seen.items():
+        if len(sizes) > 1:
+            said = '; '.join(f'{int(w)}x{int(h)} for {", ".join(sorted(ids))}'
+                             for (w, h), ids in sorted(sizes.items()))
+            problems.append(f'sizes: {kind}s are drawn at more than one size — {said}')
+
+
 def check_operators(doc, problems):
     for op in doc.getElementsByTagName('spiff:serviceTaskOperator'):
         tid = op.parentNode.parentNode.getAttribute('id')
@@ -163,6 +294,9 @@ def main(path):
     for scope_path, node in scopes(process):
         check_scope(scope_path, node, data, problems)
     check_geometry(doc, process, problems)
+    check_routing(doc, problems)
+    check_lines(doc, problems)
+    check_sizes(doc, problems)
     check_operators(doc, problems)
 
     for problem in problems:

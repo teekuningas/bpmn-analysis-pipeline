@@ -2,7 +2,6 @@
   "id": "nature-and-place",
   "title": "Themes and place",
   "question": "Do the themes people name in an account depend on where the account was recorded?",
-  "about": "Fifty accounts of experiences in nature, and the setting each one was recorded in. The accounts are synthetic: each was written from a point near a Finnish town and seeded with themes according to whether that point was urban or rural, so there is a planted signal here that the pipeline either recovers or does not. Translated from the Finnish originals.",
   "process": "process.bpmn",
   "processId": "Process_Nature",
   "sources": {
@@ -32,7 +31,7 @@
   ],
   "types": {
     "account": "one account of an experience in nature, as it was written",
-    "draft": "one free-form reading of one account",
+    "draft": { "about": "one free-form reading of one account", "is": "text" },
     "theme": "one short theme label",
     "verdict": "whether one theme appears in one account",
     "row": "one account, judged against every theme",

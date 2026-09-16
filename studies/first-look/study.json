@@ -1,0 +1,33 @@
+{
+  "id": "first-look",
+  "title": "Five texts, five summaries",
+  "question": "What is each of these five texts about?",
+  "process": "process.bpmn",
+  "processId": "Process_FirstLook",
+  "sources": {
+    "notes": "notes.json"
+  },
+  "scripted": "scripted.json",
+  "settings": [
+    {
+      "name": "sample_size",
+      "label": "Texts summarised",
+      "value": 5,
+      "min": 1,
+      "max": 5,
+      "step": 1,
+      "note": "One model call each. Five is nothing for the stand-in and a few minutes on a model in the tab."
+    }
+  ],
+  "types": {
+    "note": { "about": "one short text, as it was written" },
+    "summary": { "about": "one short summary of one text", "is": "text" }
+  },
+  "shows": {
+    "notes": {
+      "title": "id",
+      "body": "text"
+    }
+  },
+  "result": "summaries"
+}

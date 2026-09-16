@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:spiff="http://spiffworkflow.org/bpmn/schema/1.0/core"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_FirstLook"
+                  targetNamespace="https://github.com/teekuningas/bpmn-analysis-pipeline">
+
+  <bpmn:process id="Process_FirstLook" name="Five texts, five summaries" isExecutable="true">
+
+    <bpmn:property id="summaries" name="summaries"/>
+
+    <bpmn:startEvent id="Start">
+      <bpmn:outgoing>e1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="ReadNotes" name="Read">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="read" resultVariable="notes">
+          <spiff:parameters>
+            <spiff:parameter id="gives" value="&apos;collection[note]&apos;"/>
+            <spiff:parameter id="source" value="&apos;notes&apos;"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>e1</bpmn:incoming>
+      <bpmn:outgoing>e2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Sample" name="Select">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="select" resultVariable="chosen">
+          <spiff:parameters>
+            <spiff:parameter id="of" value="notes"/>
+            <spiff:parameter id="gives" value="&apos;collection[note]&apos;"/>
+            <spiff:parameter id="where" value="&apos;index &lt; sample_size&apos;"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>e2</bpmn:incoming>
+      <bpmn:outgoing>e3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:subProcess id="PerNote" name="For each text">
+      <bpmn:incoming>e3</bpmn:incoming>
+      <bpmn:outgoing>e4</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="true">
+        <bpmn:loopCardinality>count(chosen)</bpmn:loopCardinality>
+        <bpmn:loopDataOutputRef>summaries</bpmn:loopDataOutputRef>
+        <bpmn:outputDataItem name="summary"/>
+      </bpmn:multiInstanceLoopCharacteristics>
+
+      <bpmn:startEvent id="StartNote"><bpmn:outgoing>q1</bpmn:outgoing></bpmn:startEvent>
+
+      <bpmn:serviceTask id="Summarise" name="Generate">
+        <bpmn:extensionElements>
+          <spiff:serviceTaskOperator id="generate" resultVariable="summary">
+            <spiff:parameters>
+              <spiff:parameter id="of" value="chosen"/>
+              <spiff:parameter id="gives" value="&apos;summary&apos;"/>
+              <spiff:parameter id="prompt" value="&apos;Say in two or three sentences what this text is about.&apos;"/>
+            </spiff:parameters>
+          </spiff:serviceTaskOperator>
+        </bpmn:extensionElements>
+        <bpmn:incoming>q1</bpmn:incoming>
+        <bpmn:outgoing>q2</bpmn:outgoing>
+      </bpmn:serviceTask>
+
+      <bpmn:endEvent id="EndNote"><bpmn:incoming>q2</bpmn:incoming></bpmn:endEvent>
+
+      <bpmn:sequenceFlow id="q1" sourceRef="StartNote" targetRef="Summarise"/>
+      <bpmn:sequenceFlow id="q2" sourceRef="Summarise" targetRef="EndNote"/>
+    </bpmn:subProcess>
+
+    <bpmn:endEvent id="End"><bpmn:incoming>e4</bpmn:incoming></bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="e1" sourceRef="Start" targetRef="ReadNotes"/>
+    <bpmn:sequenceFlow id="e2" sourceRef="ReadNotes" targetRef="Sample"/>
+    <bpmn:sequenceFlow id="e3" sourceRef="Sample" targetRef="PerNote"/>
+    <bpmn:sequenceFlow id="e4" sourceRef="PerNote" targetRef="End"/>
+
+    <bpmn:textAnnotation id="note1"><bpmn:text>The sequential marker is the map: one model call per text, in order</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="a_note1" sourceRef="PerNote" targetRef="note1"/>
+    <bpmn:textAnnotation id="note2"><bpmn:text>A shorter run summarises fewer texts</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="a_note2" sourceRef="Sample" targetRef="note2"/>
+
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="Diagram">
+    <bpmndi:BPMNPlane id="Plane" bpmnElement="Process_FirstLook">
+
+      <bpmndi:BPMNShape id="s_Start" bpmnElement="Start">
+        <dc:Bounds x="140" y="232" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_ReadNotes" bpmnElement="ReadNotes">
+        <dc:Bounds x="220" y="210" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_Sample" bpmnElement="Sample">
+        <dc:Bounds x="360" y="210" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="s_PerNote" bpmnElement="PerNote" isExpanded="true">
+        <dc:Bounds x="510" y="170" width="380" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_StartNote" bpmnElement="StartNote">
+        <dc:Bounds x="540" y="232" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_Summarise" bpmnElement="Summarise">
+        <dc:Bounds x="645" y="210" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_EndNote" bpmnElement="EndNote">
+        <dc:Bounds x="824" y="232" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="s_End" bpmnElement="End">
+        <dc:Bounds x="940" y="232" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="s_note1" bpmnElement="note1">
+        <dc:Bounds x="560" y="60" width="280" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_note2" bpmnElement="note2">
+        <dc:Bounds x="300" y="380" width="200" height="50"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="edge_e1" bpmnElement="e1">
+        <di:waypoint x="176" y="250"/><di:waypoint x="220" y="250"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_e2" bpmnElement="e2">
+        <di:waypoint x="330" y="250"/><di:waypoint x="360" y="250"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_e3" bpmnElement="e3">
+        <di:waypoint x="470" y="250"/><di:waypoint x="510" y="250"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_e4" bpmnElement="e4">
+        <di:waypoint x="890" y="250"/><di:waypoint x="940" y="250"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_q1" bpmnElement="q1">
+        <di:waypoint x="576" y="250"/><di:waypoint x="645" y="250"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_q2" bpmnElement="q2">
+        <di:waypoint x="755" y="250"/><di:waypoint x="824" y="250"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_a_note1" bpmnElement="a_note1">
+        <di:waypoint x="700" y="170"/><di:waypoint x="700" y="110"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_a_note2" bpmnElement="a_note2">
+        <di:waypoint x="415" y="290"/><di:waypoint x="415" y="380"/>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

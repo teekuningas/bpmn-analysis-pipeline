@@ -10,7 +10,9 @@
 //   site     { id, ...the study's own fields }        pair  { left, right }
 //   finding  { theme, by, groups, n, chi2, df, v, p, q, thin, significant }
 
+import { Cancelled } from '../core/engine.js';
 import { chiSquared, benjaminiHochberg } from './stats.js';
+import { isText } from './study.js';
 
 const clean = (line) => line
   .replace(/^\s*[-*•]\s*/, '')
@@ -106,19 +108,21 @@ function extractToolOrJson(text) {
   return null;
 }
 
+// What a type the study declared as `text` is read as: writing, kept whole.
+// Nothing is asked of its shape — a schema over one unbounded string is what
+// made `draft` echo its input — so the only thing that can go wrong is nothing
+// arriving at all, and that is worth saying rather than passing on as ''.
+const prose = (text) => {
+  const written = String(text).trim();
+  if (!written) throw new Error('the reply was empty');
+  return written;
+};
+
 // A model gives back text; the type the box declared says what to make of it.
 // The shape is enforced on the sampler (see SHAPES in providers.js), so the JSON
 // path is the normal one — the line-based heuristics below are what is left for
 // a runtime that cannot constrain, and for a reply that arrives fenced.
 const READERS = {
-  draft: (text) => {
-    const structured = extractToolOrJson(text);
-    if (structured?.reading) return String(structured.reading).trim();
-    if (structured?.text) return String(structured.text).trim();
-    if (structured?.draft) return String(structured.draft).trim();
-    return String(text).trim();
-  },
-
   theme: (text) => {
     const structured = extractToolOrJson(text);
     if (structured?.label) return clean(structured.label).slice(0, 60);
@@ -150,6 +154,10 @@ const READERS = {
 
   // The reply says yes or no and offers a wording; which two labels were asked
   // about comes from what the box was handed, exactly as `verdict` does.
+  //
+  // `label` is required of the model, so it writes one either way — usually
+  // `"no"` when the answer is no, which is its verdict and not a wording. It is
+  // thrown away here: a wording to keep means nothing when nothing merges.
   judgement: (text, parts) => {
     const [a, b] = parts.map((part) => render(part.value));
     const structured = extractToolOrJson(text);
@@ -251,22 +259,39 @@ export const OPERATIONS = {
     return of.filter((item, index) => Boolean(test(item, index, ...names.map((n) => settings[n]))));
   },
 
-  generate: async ({ of, prompt, gives, labels, seed }, { provider, log, element }) => {
+  // The call is logged twice: once before it is sent and once when it settles.
+  // A call to a model in the tab is minutes, and logging only the settled one
+  // leaves the Log saying "no calls yet" for the whole of the first — so the
+  // question is shown while the answer is still being written.
+  generate: async ({ of, prompt, gives, labels, seed }, { provider, log, element, study, signal }) => {
     const wants = unquote(gives);
     const parts = slots(of, labels);
-    const content = asPrompt(parts);
-    const instruction = unquote(prompt);
-    let reply = { text: '', thought: '' };
+    const call = {
+      element, seed, pending: true,
+      instruction: unquote(prompt),
+      content: asPrompt(parts),
+      text: '',
+      thought: '',
+    };
+    log?.(call);
     try {
-      reply = await provider.generate(instruction, content, { gives: wants, parts, seed, element });
-      const reader = READERS[wants];
+      Object.assign(call, await provider.generate(call.instruction, call.content,
+        { gives: wants, parts, seed, element, signal }));
+      // A type the vocabulary knows how to read, or one the study declared as
+      // writing. Anything else is a box asking for something nothing can read.
+      const reader = READERS[wants] || (isText(study, wants) ? prose : null);
       if (!reader) throw new Error(`nothing knows how to read a ${wants} out of a reply`);
-      const result = reader(reply.text, parts);
-      log?.({ element, instruction, content, ...reply, seed });
+      const result = reader(call.text, parts);
+      call.pending = false;
+      log?.(call);
       return result;
     } catch (err) {
-      log?.({ element, instruction, content, ...reply, seed, error: err.message });
-      throw err;
+      call.pending = false;
+      call.error = err.message;
+      log?.(call);
+      // A stop is not a failure to be retried three times over — it is the
+      // person saying no, and the engine has a way of hearing that.
+      throw signal?.aborted ? new Cancelled() : err;
     }
   },
 
@@ -275,10 +300,26 @@ export const OPERATIONS = {
     return pick(FOLDS, how, 'fold')(parts, subject, by);
   },
 
-  embed: async ({ of }, { provider, element }) => {
-    const place = await provider.embed?.(render(of));
-    if (!Array.isArray(place)) throw new Error(`${element.id}: this model gives no embeddings`);
-    return place;
+  // Logged like a Generate, because it is also a call to a model — a different
+  // one, since a llama.cpp context that places cannot also write. It has no
+  // instruction and nothing to think, so the Log entry is the label and where it
+  // landed, which is all there is to say about a vector.
+  embed: async ({ of }, { provider, log, element, signal }) => {
+    const call = { element, instruction: '', content: render(of), text: '', thought: '', pending: true };
+    log?.(call);
+    try {
+      const place = await provider.embed?.(call.content, { signal });
+      if (!Array.isArray(place)) throw new Error(`${element.id}: this model gives no embeddings`);
+      call.text = `${place.length} numbers`;
+      call.pending = false;
+      log?.(call);
+      return place;
+    } catch (err) {
+      call.pending = false;
+      call.error = err.message;
+      log?.(call);
+      throw signal?.aborted ? new Cancelled() : err;
+    }
   },
 
   join: ({ left, right, on }) => {

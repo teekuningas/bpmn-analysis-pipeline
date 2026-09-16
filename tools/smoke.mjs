@@ -10,13 +10,12 @@ import { fileURLToPath } from 'node:url';
 import { DOMParser } from './xmldom.mjs';
 
 globalThis.DOMParser = DOMParser;
-globalThis.localStorage = { getItem: () => null, setItem: () => {} };
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-const { loadStudy } = await import('../runtime/study.js');
+const { loadStudy, defaultsFor } = await import('../runtime/study.js');
 const { Run } = await import('../runtime/run.js');
-const { scriptedProvider, remembering } = await import('../runtime/providers.js');
+const { scriptedProvider } = await import('../runtime/providers.js');
 
 const pct = (x) => `${String(Math.round(x * 100)).padStart(3)}%`;
 
@@ -43,8 +42,10 @@ async function one(id) {
     study,
     processes,
     processId,
-    provider: remembering(scriptedProvider(study)),
-    settings: {},
+    provider: scriptedProvider(study),
+    // What the page will be sitting on when a colleague opens it and presses
+    // Run without touching anything: the stand-in's own defaults.
+    settings: defaultsFor(study, 'scripted'),
     onEvent: ({ type, element }) => {
       if (type === 'enter' && element.id === 'PerPair') rounds += 1;
       if (type === 'enter' && element.id === 'Judge') asked += 1;
@@ -55,13 +56,22 @@ async function one(id) {
   await run.start();
   const seconds = ((Date.now() - started) / 1000).toFixed(1);
 
-  const findings = run.data[study.chart.of] || [];
+  const result = run.data[study.result || study.chart?.of] || [];
+  const findings = study.chart ? result : [];
   const themes = run.data.themes || [];
   const joined = run.data.joined || [];
   console.log(`  ran in ${seconds}s · ${run.calls.length} calls`
-    + ` · ${run.valueOf('Pool')?.length ?? 0} raw labels → ${themes.length} agreed`
-    + ` in ${rounds} round${rounds === 1 ? '' : 's'} (${asked} pairs asked about)`
-    + ` · ${joined.length} of ${run.data.rows?.length ?? 0} rows joined`);
+    + (rounds ? ` · ${run.valueOf('Pool')?.length ?? 0} raw labels → ${themes.length} agreed`
+      + ` in ${rounds} round${rounds === 1 ? '' : 's'} (${asked} pairs asked about)`
+      + ` · ${joined.length} of ${run.data.rows?.length ?? 0} rows joined` : ''));
+
+  // A study with no chart still has a result, and the point of the check is that
+  // something came out of it.
+  if (!study.chart) {
+    console.log(`\n  ${study.result} · ${result.length}`);
+    result.forEach((one, at) => console.log(`  ${String(at + 1).padStart(3)}. ${String(one).slice(0, 96)}`));
+    return true;
+  }
 
   const groups = findings[0]?.groups.map((g) => g.name) || [];
   console.log(`\n  ${'theme'.padEnd(40)} ${groups.map((g) => g.padStart(6)).join(' ')}     q`);

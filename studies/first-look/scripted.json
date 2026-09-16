@@ -1,0 +1,12 @@
+{
+  "note": "What the scripted stand-in knows instead of language: a subject, and the words that make it. A summary from it is a sentence naming the subjects it recognised and the words that put them there — crude on purpose, and enough to run the whole diagram before anything is downloaded.",
+  "lexicon": [
+    { "label": "a bicycle repair", "match": ["bicycle", "wheel", "frame", "axle", "nut", "tightening", "balcony"] },
+    { "label": "making jam", "match": ["plums", "jars", "sugar", "stones", "stove", "boiled", "batch", "shelf"] },
+    { "label": "a storm and a power cut", "match": ["storm", "forecast", "power", "street", "torches", "fence", "neighbourhood"] },
+    { "label": "a library reshelving", "match": ["library", "reference", "atlas", "catalogue", "librarian", "shelved", "reshelved", "floor"] },
+    { "label": "a replacement bus", "match": ["bus", "train", "journey", "villages", "village", "driver", "stop", "route", "meeting"] },
+    { "label": "waiting", "match": ["week", "days", "wait", "long", "late", "hour", "minutes", "afternoon", "evening", "night"] },
+    { "label": "other people", "match": ["people", "nobody", "talking", "spoken", "announced", "apologetic"] }
+  ]
+}
