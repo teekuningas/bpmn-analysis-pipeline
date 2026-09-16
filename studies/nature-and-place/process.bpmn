@@ -4,13 +4,15 @@
                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
                   xmlns:spiff="http://spiffworkflow.org/bpmn/schema/1.0/core"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                   id="Definitions_Nature"
                   targetNamespace="https://github.com/teekuningas/bpmn-analysis-pipeline">
 
   <bpmn:process id="Process_Nature" name="Themes and place" isExecutable="true">
 
     <bpmn:property id="all_readings" name="all_readings"/>
-    <bpmn:property id="agreed" name="agreed"/>
+    <bpmn:property id="places" name="places"/>
+    <bpmn:property id="judgements" name="judgements"/>
     <bpmn:property id="rows" name="rows"/>
 
     <bpmn:startEvent id="Start">
@@ -145,50 +147,119 @@
       <bpmn:outgoing>f5</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <bpmn:subProcess id="Consolidate" name="Agree on a vocabulary">
+    <bpmn:subProcess id="PerTheme" name="For each theme">
       <bpmn:incoming>f5</bpmn:incoming>
+      <bpmn:incoming>f_back</bpmn:incoming>
       <bpmn:outgoing>f5b</bpmn:outgoing>
       <bpmn:multiInstanceLoopCharacteristics isSequential="true">
         <bpmn:loopCardinality>count(pooled)</bpmn:loopCardinality>
-        <bpmn:loopDataOutputRef>agreed</bpmn:loopDataOutputRef>
-        <bpmn:outputDataItem name="canonical"/>
+        <bpmn:loopDataOutputRef>places</bpmn:loopDataOutputRef>
+        <bpmn:outputDataItem name="place"/>
       </bpmn:multiInstanceLoopCharacteristics>
 
-      <bpmn:startEvent id="StartCons"><bpmn:outgoing>c1</bpmn:outgoing></bpmn:startEvent>
+      <bpmn:startEvent id="StartPlace"><bpmn:outgoing>e1</bpmn:outgoing></bpmn:startEvent>
 
-      <bpmn:serviceTask id="Canonicalise" name="Generate">
+      <bpmn:serviceTask id="Place" name="Embed">
         <bpmn:extensionElements>
-          <spiff:serviceTaskOperator id="generate" resultVariable="canonical">
+          <spiff:serviceTaskOperator id="embed" resultVariable="place">
             <spiff:parameters>
-              <spiff:parameter id="of" value="[pooled, agreed]"/>
-              <spiff:parameter id="labels" value="&apos;NEW LABEL|AGREED SO FAR&apos;"/>
-              <spiff:parameter id="gives" value="&apos;theme&apos;"/>
-              <spiff:parameter id="prompt" value="&apos;If the new label means the same as one of the labels agreed so far, reply with that agreed label copied exactly. Otherwise reply with the new label, tidied. Reply with one label and nothing else.&apos;"/>
+              <spiff:parameter id="of" value="pooled"/>
+              <spiff:parameter id="gives" value="&apos;vector&apos;"/>
             </spiff:parameters>
           </spiff:serviceTaskOperator>
         </bpmn:extensionElements>
-        <bpmn:incoming>c1</bpmn:incoming>
-        <bpmn:outgoing>c2</bpmn:outgoing>
+        <bpmn:incoming>e1</bpmn:incoming>
+        <bpmn:outgoing>e2</bpmn:outgoing>
       </bpmn:serviceTask>
 
-      <bpmn:endEvent id="EndCons"><bpmn:incoming>c2</bpmn:incoming></bpmn:endEvent>
+      <bpmn:endEvent id="EndPlace"><bpmn:incoming>e2</bpmn:incoming></bpmn:endEvent>
 
-      <bpmn:sequenceFlow id="c1" sourceRef="StartCons" targetRef="Canonicalise"/>
-      <bpmn:sequenceFlow id="c2" sourceRef="Canonicalise" targetRef="EndCons"/>
+      <bpmn:sequenceFlow id="e1" sourceRef="StartPlace" targetRef="Place"/>
+      <bpmn:sequenceFlow id="e2" sourceRef="Place" targetRef="EndPlace"/>
     </bpmn:subProcess>
+
+    <bpmn:serviceTask id="Nearest" name="Combine">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="combine" resultVariable="candidates">
+          <spiff:parameters>
+            <spiff:parameter id="parts" value="places"/>
+            <spiff:parameter id="with" value="pooled"/>
+            <spiff:parameter id="gives" value="&apos;collection[pair[theme, theme]]&apos;"/>
+            <spiff:parameter id="how" value="&apos;nearest&apos;"/>
+            <spiff:parameter id="by" value="pairs_per_round"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>f5b</bpmn:incoming>
+      <bpmn:outgoing>f5c</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:subProcess id="PerPair" name="Until one merges">
+      <bpmn:incoming>f5c</bpmn:incoming>
+      <bpmn:outgoing>f5d</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="true">
+        <bpmn:loopCardinality>count(candidates)</bpmn:loopCardinality>
+        <bpmn:loopDataOutputRef>judgements</bpmn:loopDataOutputRef>
+        <bpmn:outputDataItem name="judgement"/>
+        <bpmn:completionCondition>judgement.same</bpmn:completionCondition>
+      </bpmn:multiInstanceLoopCharacteristics>
+
+      <bpmn:startEvent id="StartPair"><bpmn:outgoing>j1</bpmn:outgoing></bpmn:startEvent>
+
+      <bpmn:serviceTask id="Judge" name="Generate">
+        <bpmn:extensionElements>
+          <spiff:serviceTaskOperator id="generate" resultVariable="judgement">
+            <spiff:parameters>
+              <spiff:parameter id="of" value="candidates"/>
+              <spiff:parameter id="labels" value="&apos;THEME A|THEME B&apos;"/>
+              <spiff:parameter id="gives" value="&apos;judgement&apos;"/>
+              <spiff:parameter id="prompt" value="&apos;Are these two the same concept? Say no if either is broader than the other, or names a different side of the same subject. If they are the same, give the clearer of the two wordings.&apos;"/>
+            </spiff:parameters>
+          </spiff:serviceTaskOperator>
+        </bpmn:extensionElements>
+        <bpmn:incoming>j1</bpmn:incoming>
+        <bpmn:outgoing>j2</bpmn:outgoing>
+      </bpmn:serviceTask>
+
+      <bpmn:endEvent id="EndPair"><bpmn:incoming>j2</bpmn:incoming></bpmn:endEvent>
+
+      <bpmn:sequenceFlow id="j1" sourceRef="StartPair" targetRef="Judge"/>
+      <bpmn:sequenceFlow id="j2" sourceRef="Judge" targetRef="EndPair"/>
+    </bpmn:subProcess>
+
+    <bpmn:serviceTask id="Settle" name="Combine">
+      <bpmn:extensionElements>
+        <spiff:serviceTaskOperator id="combine" resultVariable="pooled">
+          <spiff:parameters>
+            <spiff:parameter id="parts" value="judgements"/>
+            <spiff:parameter id="with" value="pooled"/>
+            <spiff:parameter id="gives" value="&apos;collection[theme]&apos;"/>
+            <spiff:parameter id="how" value="&apos;merge&apos;"/>
+          </spiff:parameters>
+        </spiff:serviceTaskOperator>
+      </bpmn:extensionElements>
+      <bpmn:incoming>f5d</bpmn:incoming>
+      <bpmn:outgoing>f5e</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Converged" name="did one merge?" default="f6">
+      <bpmn:incoming>f5e</bpmn:incoming>
+      <bpmn:outgoing>f_back</bpmn:outgoing>
+      <bpmn:outgoing>f6</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
 
     <bpmn:serviceTask id="Vocabulary" name="Combine">
       <bpmn:extensionElements>
         <spiff:serviceTaskOperator id="combine" resultVariable="themes">
           <spiff:parameters>
-            <spiff:parameter id="parts" value="agreed"/>
+            <spiff:parameter id="parts" value="pooled"/>
             <spiff:parameter id="gives" value="&apos;collection[theme]&apos;"/>
             <spiff:parameter id="how" value="&apos;distinct&apos;"/>
           </spiff:parameters>
         </spiff:serviceTaskOperator>
       </bpmn:extensionElements>
-      <bpmn:incoming>f5b</bpmn:incoming>
-      <bpmn:outgoing>f6</bpmn:outgoing>
+      <bpmn:incoming>f6</bpmn:incoming>
+      <bpmn:outgoing>f6b</bpmn:outgoing>
     </bpmn:serviceTask>
 
     <bpmn:serviceTask id="ReadSites" name="Read">
@@ -205,7 +276,7 @@
     </bpmn:serviceTask>
 
     <bpmn:parallelGateway id="Merge">
-      <bpmn:incoming>f6</bpmn:incoming>
+      <bpmn:incoming>f6b</bpmn:incoming>
       <bpmn:incoming>f8</bpmn:incoming>
       <bpmn:outgoing>f9</bpmn:outgoing>
     </bpmn:parallelGateway>
@@ -315,9 +386,16 @@
     <bpmn:sequenceFlow id="f3" sourceRef="ReadAccounts" targetRef="Sample"/>
     <bpmn:sequenceFlow id="f3b" sourceRef="Sample" targetRef="PerAccount"/>
     <bpmn:sequenceFlow id="f4" sourceRef="PerAccount" targetRef="Pool"/>
-    <bpmn:sequenceFlow id="f5" sourceRef="Pool" targetRef="Consolidate"/>
-    <bpmn:sequenceFlow id="f5b" sourceRef="Consolidate" targetRef="Vocabulary"/>
-    <bpmn:sequenceFlow id="f6" sourceRef="Vocabulary" targetRef="Merge"/>
+    <bpmn:sequenceFlow id="f5" sourceRef="Pool" targetRef="PerTheme"/>
+    <bpmn:sequenceFlow id="f5b" sourceRef="PerTheme" targetRef="Nearest"/>
+    <bpmn:sequenceFlow id="f5c" sourceRef="Nearest" targetRef="PerPair"/>
+    <bpmn:sequenceFlow id="f5d" sourceRef="PerPair" targetRef="Settle"/>
+    <bpmn:sequenceFlow id="f5e" sourceRef="Settle" targetRef="Converged"/>
+    <bpmn:sequenceFlow id="f_back" sourceRef="Converged" targetRef="PerTheme">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">judgements.length &gt; 0 &amp;&amp; judgements[judgements.length - 1].same</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f6" sourceRef="Converged" targetRef="Vocabulary"/>
+    <bpmn:sequenceFlow id="f6b" sourceRef="Vocabulary" targetRef="Merge"/>
     <bpmn:sequenceFlow id="f7" sourceRef="Fork" targetRef="ReadSites"/>
     <bpmn:sequenceFlow id="f8" sourceRef="ReadSites" targetRef="Merge"/>
     <bpmn:sequenceFlow id="f9" sourceRef="Merge" targetRef="PerScored"/>
@@ -330,12 +408,14 @@
     <bpmn:association id="a_note1" sourceRef="PerAccount" targetRef="note1"/>
     <bpmn:textAnnotation id="note3"><bpmn:text>A short run reads the first few accounts; the whole set takes much longer</bpmn:text></bpmn:textAnnotation>
     <bpmn:association id="a_note3" sourceRef="Sample" targetRef="note3"/>
-    <bpmn:textAnnotation id="note2"><bpmn:text>Each label is matched against the vocabulary agreed so far, or starts a new entry</bpmn:text></bpmn:textAnnotation>
-    <bpmn:association id="a_note2" sourceRef="Consolidate" targetRef="note2"/>
+    <bpmn:textAnnotation id="note2"><bpmn:text>Only the most promising pairs are asked about. Embedding ranks them; it never decides</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="a_note2" sourceRef="Nearest" targetRef="note2"/>
     <bpmn:textAnnotation id="note4"><bpmn:text>Where each account was recorded, gathered separately</bpmn:text></bpmn:textAnnotation>
     <bpmn:association id="a_note4" sourceRef="ReadSites" targetRef="note4"/>
     <bpmn:textAnnotation id="note5"><bpmn:text>One judgement at a time: this theme, this account</bpmn:text></bpmn:textAnnotation>
     <bpmn:association id="a_note5" sourceRef="PerScored" targetRef="note5"/>
+    <bpmn:textAnnotation id="note7"><bpmn:text>One merge, then start over with fresh pairs. A round where none of them merge is the end of it</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="a_note7" sourceRef="Converged" targetRef="note7"/>
     <bpmn:textAnnotation id="note6"><bpmn:text>Accounts with no site record drop out here</bpmn:text></bpmn:textAnnotation>
     <bpmn:association id="a_note6" sourceRef="WithContext" targetRef="note6"/>
   </bpmn:process>
@@ -391,23 +471,48 @@
         <dc:Bounds x="1300" y="210" width="110" height="80"/>
       </bpmndi:BPMNShape>
 
-      <bpmndi:BPMNShape id="s_Consolidate" bpmnElement="Consolidate" isExpanded="true">
-        <dc:Bounds x="1130" y="490" width="290" height="160"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_StartCons" bpmnElement="StartCons">
-        <dc:Bounds x="1356" y="552" width="36" height="36"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_Canonicalise" bpmnElement="Canonicalise">
-        <dc:Bounds x="1220" y="530" width="110" height="80"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_EndCons" bpmnElement="EndCons">
-        <dc:Bounds x="1160" y="552" width="36" height="36"/>
-      </bpmndi:BPMNShape>
 
+
+      <bpmndi:BPMNShape id="s_note7" bpmnElement="note7">
+        <dc:Bounds x="530" y="450" width="290" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_PerTheme" bpmnElement="PerTheme" isExpanded="true">
+        <dc:Bounds x="1100" y="450" width="320" height="140"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_StartPlace" bpmnElement="StartPlace">
+        <dc:Bounds x="1125" y="502" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_Place" bpmnElement="Place">
+        <dc:Bounds x="1185" y="480" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_EndPlace" bpmnElement="EndPlace">
+        <dc:Bounds x="1330" y="502" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_Nearest" bpmnElement="Nearest">
+        <dc:Bounds x="1240" y="620" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_PerPair" bpmnElement="PerPair" isExpanded="true">
+        <dc:Bounds x="1100" y="730" width="320" height="140"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_StartPair" bpmnElement="StartPair">
+        <dc:Bounds x="1125" y="782" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_Judge" bpmnElement="Judge">
+        <dc:Bounds x="1185" y="760" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_EndPair" bpmnElement="EndPair">
+        <dc:Bounds x="1330" y="782" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_Settle" bpmnElement="Settle">
+        <dc:Bounds x="950" y="760" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_Converged" bpmnElement="Converged">
+        <dc:Bounds x="860" y="775" width="50" height="50"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="820" y="830" width="130" height="28"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Vocabulary" bpmnElement="Vocabulary">
-        <dc:Bounds x="960" y="530" width="110" height="80"/>
+        <dc:Bounds x="670" y="640" width="110" height="80"/>
       </bpmndi:BPMNShape>
-
       <bpmndi:BPMNShape id="s_ReadSites" bpmnElement="ReadSites">
         <dc:Bounds x="280" y="740" width="110" height="80"/>
       </bpmndi:BPMNShape>
@@ -419,7 +524,7 @@
         <dc:Bounds x="560" y="860" width="420" height="200"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_StartScored" bpmnElement="StartScored">
-        <dc:Bounds x="585" y="942" width="36" height="36"/>
+        <dc:Bounds x="585" y="922" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_Score" bpmnElement="Score">
         <dc:Bounds x="650" y="900" width="110" height="80"/>
@@ -428,7 +533,7 @@
         <dc:Bounds x="790" y="900" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_EndScored" bpmnElement="EndScored">
-        <dc:Bounds x="925" y="942" width="36" height="36"/>
+        <dc:Bounds x="925" y="922" width="36" height="36"/>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNShape id="s_WithContext" bpmnElement="WithContext">
@@ -451,7 +556,7 @@
         <dc:Bounds x="360" y="56" width="300" height="60"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_note2" bpmnElement="note2">
-        <dc:Bounds x="1130" y="672" width="330" height="70"/>
+        <dc:Bounds x="900" y="610" width="300" height="70"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s_note4" bpmnElement="note4">
         <dc:Bounds x="240" y="660" width="290" height="56"/>
@@ -500,20 +605,48 @@
         <di:waypoint x="1210" y="250"/><di:waypoint x="1300" y="250"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f5" bpmnElement="f5">
-        <di:waypoint x="1355" y="290"/><di:waypoint x="1355" y="490"/>
+        <di:waypoint x="1355" y="290"/><di:waypoint x="1355" y="450"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_c1" bpmnElement="c1">
-        <di:waypoint x="1356" y="570"/><di:waypoint x="1330" y="570"/>
+      <bpmndi:BPMNEdge id="e_e1" bpmnElement="e1">
+        <di:waypoint x="1161" y="520"/><di:waypoint x="1185" y="520"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_c2" bpmnElement="c2">
-        <di:waypoint x="1220" y="570"/><di:waypoint x="1196" y="570"/>
+      <bpmndi:BPMNEdge id="e_e2" bpmnElement="e2">
+        <di:waypoint x="1295" y="520"/><di:waypoint x="1330" y="520"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f5b" bpmnElement="f5b">
-        <di:waypoint x="1130" y="570"/><di:waypoint x="1070" y="570"/>
+        <di:waypoint x="1295" y="590"/><di:waypoint x="1295" y="620"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f5c" bpmnElement="f5c">
+        <di:waypoint x="1295" y="700"/><di:waypoint x="1295" y="730"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_j1" bpmnElement="j1">
+        <di:waypoint x="1161" y="800"/><di:waypoint x="1185" y="800"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_j2" bpmnElement="j2">
+        <di:waypoint x="1295" y="800"/><di:waypoint x="1330" y="800"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f5d" bpmnElement="f5d">
+        <di:waypoint x="1100" y="800"/><di:waypoint x="1060" y="800"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f5e" bpmnElement="f5e">
+        <di:waypoint x="950" y="800"/><di:waypoint x="910" y="800"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f_back" bpmnElement="f_back">
+        <di:waypoint x="885" y="775"/><di:waypoint x="885" y="445"/>
+        <di:waypoint x="1180" y="445"/><di:waypoint x="1180" y="450"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f6" bpmnElement="f6">
-        <di:waypoint x="1015" y="610"/><di:waypoint x="1015" y="780"/>
-        <di:waypoint x="750" y="780"/>
+        <di:waypoint x="860" y="800"/><di:waypoint x="820" y="800"/>
+        <di:waypoint x="820" y="690"/><di:waypoint x="780" y="690"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_f6b" bpmnElement="f6b">
+        <di:waypoint x="725" y="720"/><di:waypoint x="725" y="755"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_a_note2" bpmnElement="a_note2">
+        <di:waypoint x="1240" y="655"/><di:waypoint x="1200" y="650"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_a_note7" bpmnElement="a_note7">
+        <di:waypoint x="862" y="783"/><di:waypoint x="820" y="520"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_f7" bpmnElement="f7">
         <di:waypoint x="225" y="275"/><di:waypoint x="225" y="780"/>
@@ -552,9 +685,6 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_a_note3" bpmnElement="a_note3">
         <di:waypoint x="475" y="210"/><di:waypoint x="475" y="116"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_a_note2" bpmnElement="a_note2">
-        <di:waypoint x="1275" y="650"/><di:waypoint x="1275" y="672"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e_a_note4" bpmnElement="a_note4">
         <di:waypoint x="300" y="740"/><di:waypoint x="300" y="716"/>

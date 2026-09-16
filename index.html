@@ -18,13 +18,13 @@
 
 <main>
   <div id="canvas"></div>
-  <aside id="drawer" hidden>
+  <aside id="drawer">
+    <div class="resize-handle" id="resize"></div>
     <nav id="tabs">
       <button type="button" data-tab="data">Data</button>
-      <button type="button" data-tab="value">Value</button>
+      <button type="button" data-tab="value">Output</button>
       <button type="button" data-tab="log">Log</button>
-      <button type="button" data-tab="result">Result</button>
-      <button type="button" data-tab="model" class="apart">Model</button>
+      <button type="button" data-tab="setup" class="apart" title="Model and settings">Setup</button>
       <button type="button" id="close" aria-label="Close">×</button>
     </nav>
     <div id="panel"></div>
@@ -37,17 +37,10 @@
   <div id="types"></div>
 
   <div id="controls">
-    <span class="field">Model <button type="button" id="model">Scripted stand-in</button></span>
-    <span id="settings"></span>
-    <label class="field" title="How long to hold on each step, so a run can be followed">
-      Delay
-      <input type="range" id="pace" min="0" max="600" step="50" value="150"/>
-      <output id="pace-out">150 ms</output>
-    </label>
-    <button type="button" id="browse">Data</button>
     <button type="button" id="run">Run</button>
     <button type="button" id="stop" hidden>Stop</button>
   </div>
+  <div id="hint"></div>
 
   <div id="progress"></div>
 </footer>

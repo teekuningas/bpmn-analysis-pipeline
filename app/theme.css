@@ -8,9 +8,9 @@
   --active: #c08457;
   --done: #8ba284;
 
-  /* Categorical slots for the plot, in fixed order. Validated against the
-     paper surface for lightness, chroma, colour-vision separation and
-     contrast — see docs/INTERNAL.md before changing one. */
+  /* Categorical slots for the plot, in fixed order. Validated against the paper
+     surface for lightness, chroma, colour-vision separation and contrast;
+     re-run a validator before changing one. */
   --series-1: #b85c22;
   --series-2: #2b6fa8;
   --series-3: #4f8a3a;
@@ -45,10 +45,18 @@ main { flex: 1 1 auto; min-height: 0; display: flex; }
 #canvas { flex: 1 1 auto; min-width: 0; }
 
 #drawer {
-  flex: 0 0 min(460px, 46vw); display: flex; flex-direction: column;
+  flex: 0 0 var(--drawer-width, min(460px, 46vw)); display: flex; flex-direction: column;
   border-left: 1px solid var(--hair); background: var(--panel); min-height: 0;
+  position: relative;
 }
 #drawer[hidden] { display: none; }
+#drawer .resize-handle {
+  position: absolute; left: -4px; top: 0; bottom: 0; width: 8px;
+  cursor: col-resize; z-index: 10; user-select: none;
+}
+#drawer .resize-handle:hover, #drawer .resize-handle.dragging {
+  background: var(--active); opacity: .25;
+}
 #tabs { display: flex; gap: 2px; padding: 10px 12px 0; border-bottom: 1px solid var(--hair); }
 #tabs button {
   border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--faint);
@@ -89,6 +97,10 @@ footer {
 #caption .loop { margin-top: 3px; color: var(--active); font-family: var(--mono); font-size: 12px; }
 #caption .setting { font-size: 12.5px; font-style: italic; margin-top: 3px; }
 #caption .problem { color: var(--active); font-size: 12.5px; }
+.thought {
+  color: var(--faint); font-size: 12px; line-height: 1.6; white-space: pre-wrap;
+  border-left: 2px solid var(--hair); padding-left: 10px; margin: 4px 0 8px;
+}
 #caption .hint { font-size: 12.5px; color: var(--faint); }
 #caption .hint b { color: var(--ink); font-weight: 500; }
 
@@ -98,6 +110,9 @@ footer {
 }
 .field { display: inline-flex; align-items: center; gap: 7px; }
 .field.group { gap: 6px; }
+#hint {
+  text-align: center; font-size: 11.5px; color: var(--faint); height: 15px; margin-top: 6px;
+}
 #progress {
   font-family: var(--mono); font-size: 11.5px; color: var(--faint);
   height: 17px; overflow: hidden; text-align: center; padding: 0 16px;
@@ -116,7 +131,10 @@ button:disabled { color: var(--faint); cursor: default; }
 button:focus-visible, select:focus-visible, input:focus-visible {
   outline: 2px solid var(--active); outline-offset: 2px;
 }
-#run { padding-left: 22px; padding-right: 22px; }
+#run, #stop {
+  padding: 9px 34px; font-size: 14px; border-color: var(--active); color: var(--active);
+}
+#run:hover:not(:disabled), #stop:hover { background: var(--active); color: var(--paper); border-color: var(--active); }
 input[type="range"] { border: 0; padding: 0; width: 110px; }
 #settings output { font-family: var(--mono); font-size: 12px; color: var(--ink); min-width: 2ch; }
 
@@ -154,6 +172,26 @@ marker path, marker polyline, marker circle { fill: var(--line) !important; stro
 }
 .bjs-powered-by { opacity: .25; }
 
+/* ------------------------------------------------------------- setup panel */
+
+.model-card { border: 1px solid var(--hair); border-radius: 4px; padding: 12px 14px; margin-bottom: 12px; }
+.model-card-head { display: flex; align-items: baseline; gap: 10px; }
+.model-card-head b { font-size: 14px; }
+.model-card-head .cost { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-left: auto; }
+.model-card .bar { margin: 10px 0 6px; }
+.note { color: var(--faint); font-size: 12px; line-height: 1.5; margin-top: 8px; }
+
+.stand-in {
+  display: flex; gap: 8px; align-items: flex-start;
+  font-size: 12.5px; color: var(--faint); line-height: 1.5; margin-bottom: 4px; cursor: pointer;
+}
+.stand-in input { width: auto; margin: 2px 0 0; padding: 0; border: 0; }
+
+.knobs { display: flex; flex-direction: column; gap: 8px; }
+.knob { display: grid; grid-template-columns: 8.5em 1fr 4em; gap: 10px; align-items: center; font-size: 12.5px; }
+.knob input[type="range"] { width: 100%; }
+.knob output { font-family: var(--mono); font-size: 11.5px; color: var(--ink); text-align: right; }
+
 /* ------------------------------------------------------------- model panel */
 
 .pick {
@@ -162,6 +200,7 @@ marker path, marker polyline, marker circle { fill: var(--line) !important; stro
   border: 1px solid var(--hair); border-radius: 4px; background: var(--paper);
 }
 .pick.on { border-color: var(--active); }
+.pick.off { opacity: .55; cursor: default; }
 .pick input { margin: 3px 0 0; padding: 0; width: auto; }
 .pick .name { font-weight: 600; }
 .pick .cost { font-family: var(--mono); font-size: 10.5px; color: var(--faint); align-self: center; }
@@ -173,11 +212,19 @@ marker path, marker polyline, marker circle { fill: var(--line) !important; stro
 }
 .detail.stack { flex-direction: column; align-items: stretch; }
 .detail input, .detail select { font-size: 12px; }
+.detail .row { display: flex; align-items: center; gap: 8px; }
+.detail .field { display: flex; align-items: center; gap: 8px; }
+.detail .field input[type="text"] { flex: 1 1 auto; min-width: 0; font-family: var(--mono); font-size: 11px; }
+.detail code { font-size: 11px; }
 .bar {
   flex: 1 1 100%; height: 4px; background: var(--hair); border-radius: 2px; overflow: hidden;
 }
 .bar span { display: block; height: 100%; background: var(--active); transition: width .3s; }
 .problem { color: var(--active); font-size: 12.5px; }
+.thought {
+  color: var(--faint); font-size: 12px; line-height: 1.6; white-space: pre-wrap;
+  border-left: 2px solid var(--hair); padding-left: 10px; margin: 4px 0 8px;
+}
 
 /* ------------------------------------------------------------ panel bodies */
 
@@ -203,6 +250,8 @@ marker path, marker polyline, marker circle { fill: var(--line) !important; stro
 #panel summary { cursor: pointer; color: var(--ink); }
 #panel summary::marker { color: var(--line); }
 #panel .signature { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+#panel .param { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+#panel .param-key { font-family: var(--mono); font-size: 11px; color: var(--faint); width: 45px; text-align: right; flex-shrink: 0; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .chips span {
@@ -300,7 +349,7 @@ table.grid th.turn span {
   footer { padding: 10px 0 14px; gap: 8px; }
   #canvas { flex: 0 0 30vh; }
   #controls { gap: 8px 12px; padding: 0 12px; }
-  #progress { height: auto; min-height: 15px; }
+  #hint, #progress { height: auto; min-height: 15px; }
   #panel { padding: 14px 14px 32px; }
   .chart .axis, .chart .row { grid-template-columns: 1fr 74px 50px; row-gap: 2px; }
   .chart .axis span:first-child, .chart .row .theme { grid-column: 1 / -1; white-space: normal; }

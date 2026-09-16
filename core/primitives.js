@@ -13,6 +13,10 @@ export const PRIMITIVES = {
     label: 'Generate', in: { of: 'a' }, out: 'b', model: true,
     note: 'the prompt is the function',
   },
+  embed: {
+    label: 'Embed', in: { of: 'a' }, out: 'vector', model: true,
+    note: 'a place in meaning-space — guidance, never the judgement',
+  },
   combine: {
     label: 'Combine', in: { parts: 'collection[a]' }, optional: { with: 'b' }, out: 'c',
     note: 'fold — `how` says which one, `with` what the parts are folded about',
@@ -31,6 +35,7 @@ export const PRIMITIVES = {
 // else can. Every other name belongs to the study that named it.
 export const TYPES = {
   finding: 'one association, corrected for many tests — what Test gives',
+  vector: 'where a thing sits in meaning-space — what Embed gives',
   collection: 'many of something, in order',
   pair: 'one of each, side by side',
 };

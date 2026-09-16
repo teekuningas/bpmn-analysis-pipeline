@@ -14,7 +14,7 @@ const SUPPORTED = new Set([
   'serviceTask', 'userTask', 'subProcess',
   'sequenceFlow', 'conditionExpression',
   'multiInstanceLoopCharacteristics', 'loopCardinality', 'loopDataOutputRef',
-  'outputDataItem', 'standardLoopCharacteristics',
+  'outputDataItem', 'standardLoopCharacteristics', 'completionCondition',
   'textAnnotation', 'text', 'association',
 ]);
 
@@ -45,6 +45,7 @@ const parseLoop = (el) => {
       cardinality: text(mi, 'loopCardinality'),
       outputRef: text(mi, 'loopDataOutputRef'),
       outputItem: (children(mi, 'outputDataItem')[0] || {}).getAttribute?.('name'),
+      until: text(mi, 'completionCondition') || null,
     };
   }
   const [std] = children(el, 'standardLoopCharacteristics');

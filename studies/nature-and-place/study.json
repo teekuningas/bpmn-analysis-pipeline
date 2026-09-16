@@ -19,6 +19,15 @@
       "max": 50,
       "step": 2,
       "note": "Every account costs two readings and one judgement per theme. Twelve is a few minutes on a real model; fifty is an hour."
+    },
+    {
+      "name": "pairs_per_round",
+      "label": "Pairs per round",
+      "value": 10,
+      "min": 4,
+      "max": 40,
+      "step": 2,
+      "note": "How many of the most promising theme pairs to ask about before giving up on a round. The original stops after a hundred rejections; ten is the toy's version of that."
     }
   ],
   "types": {
@@ -27,7 +36,8 @@
     "theme": "one short theme label",
     "verdict": "whether one theme appears in one account",
     "row": "one account, judged against every theme",
-    "site": "the setting an account was recorded in"
+    "site": "the setting an account was recorded in",
+    "judgement": "whether two themes are the same concept, and the wording to keep"
   },
   "shows": {
     "accounts": {

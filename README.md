@@ -1,6 +1,6 @@
 # Analysis pipelines as BPMN
 
-An analysis — accounts in, findings out — drawn as a BPMN process built from six
+An analysis — accounts in, findings out — drawn as a BPMN process built from seven
 primitives, and then actually run, in the browser, with a real model if you want
 one. Everything else is arrangement: a multi-instance marker is `map`, a
 sequential one is also `fold`, a fork and join runs independent branches.
@@ -30,15 +30,40 @@ tools/      the checks
 Strictly downward: `app → runtime → core`, and nothing in `core` knows there is
 a browser.
 
-## The two models you can run it with
+## Running it
 
-| | download | what it is |
-| --- | --- | --- |
-| **Scripted stand-in** | none | keyword matching. Not a language model — but every step runs and the statistics at the end are computed, not staged. The baseline a real model has to beat. |
-| **Gemma, in this tab** | ~1–3 GB | [Transformers.js](https://huggingface.co/docs/transformers.js) over WebGPU, falling back to WebAssembly where there is none. Press **Download** once; the browser keeps the weights, so nothing is committed here and later runs start straight away. |
+Open it, look at the accounts in the panel, press **Run**. The first Run fetches
+the model; after that the browser keeps it. There is nothing to configure.
 
-Replies are remembered, so a second run of the same thing is free. **Delay** holds
-on each step so a run can be watched rather than just waited out.
+The model is Gemma 4 E2B — Google's quantisation-aware weights, requantised per
+layer by Unsloth — running on [llama.cpp compiled to
+WebAssembly](https://github.com/ngxson/wllama). No server, no API key. It uses
+the GPU where the browser has WebGPU and the CPU where it does not, and it
+reasons before it answers: the thinking is shown in the **Log** panel, which in a
+qualitative analysis is the interesting part. Every box's declared type is
+enforced on the reply as a JSON schema, so a reply cannot come back misshapen.
+
+**Setup** (a tab in the panel) holds everything a first visit should not have to
+see: which backend it got, the download's state, a scripted stand-in that needs no
+download, how many accounts to read, how many pairs to compare per round, and the
+per-step delay.
+
+### Hosting it
+
+Copy the files anywhere static. The model comes from the Hugging Face CDN, so
+there is nothing else to host.
+
+The one thing that matters: serve the page with
+`Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`. Without them there is no
+`SharedArrayBuffer` and llama.cpp gets **one** CPU thread. GitHub and GitLab Pages
+cannot set headers per project; any host you control can. A browser with WebGPU
+cares much less, since the threads are only for the CPU path.
+
+On a CPU expect a few tokens a second, so a first run takes a while; the model
+thinks before it answers and a single judgement runs to a few hundred tokens. A
+browser with WebGPU is much faster and needs nothing from this page — Chromium on
+Linux wants `--enable-unsafe-webgpu`; most other platforms have it already.
 
 ## Adding an analysis
 

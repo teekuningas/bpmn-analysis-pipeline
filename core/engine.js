@@ -16,6 +16,10 @@
 //
 //   A sequential one also lets the body see what earlier instances collected,
 //   under the name it collects into. That is what makes a map usable as a fold.
+//
+//   A completion condition stops a sequential loop at the first instance that
+//   satisfies it. That is what makes "walk the candidates until one of them
+//   works" a loop rather than a search written by hand.
 
 const OVER = /^count\(([A-Za-z_]\w*)\)$/;
 
@@ -106,7 +110,7 @@ export class Engine {
   }
 
   async runLoop(el, data) {
-    const { cardinality, outputRef, outputItem, sequential, standard } = el.loop;
+    const { cardinality, outputRef, outputItem, sequential, standard, until } = el.loop;
     const over = cardinality.match(OVER);
     const source = over ? data[over[1]] : null;
     const total = Number(evaluate(cardinality, data));
@@ -122,6 +126,7 @@ export class Engine {
       const result = await this.executeBody(el, scoped);
       if (outputRef) collected.push(outputItem ? scoped[outputItem] : result);
       await this.services.onEvent({ type: 'progress', element: el, index: index + 1, total });
+      if (until && evaluate(until, scoped)) break;
     }
   }
 

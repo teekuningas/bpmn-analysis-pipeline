@@ -35,12 +35,20 @@ async function one(id) {
   console.log(`  types check · ${model.info.size} boxes · sources ${Object
     .entries(study.data).map(([k, v]) => `${k}=${v.length}`).join(' ')}`);
 
+  // Consolidation goes round until a round merges nothing, so the number of
+  // rounds and the pairs asked about are the things worth printing.
+  let rounds = 0;
+  let asked = 0;
   const run = new Run({
     study,
     processes,
     processId,
     provider: remembering(scriptedProvider(study)),
     settings: {},
+    onEvent: ({ type, element }) => {
+      if (type === 'enter' && element.id === 'PerPair') rounds += 1;
+      if (type === 'enter' && element.id === 'Judge') asked += 1;
+    },
   });
 
   const started = Date.now();
@@ -51,7 +59,8 @@ async function one(id) {
   const themes = run.data.themes || [];
   const joined = run.data.joined || [];
   console.log(`  ran in ${seconds}s · ${run.calls.length} calls`
-    + ` · ${run.data.pooled?.length ?? 0} raw labels → ${themes.length} agreed`
+    + ` · ${run.valueOf('Pool')?.length ?? 0} raw labels → ${themes.length} agreed`
+    + ` in ${rounds} round${rounds === 1 ? '' : 's'} (${asked} pairs asked about)`
     + ` · ${joined.length} of ${run.data.rows?.length ?? 0} rows joined`);
 
   const groups = findings[0]?.groups.map((g) => g.name) || [];

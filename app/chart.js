@@ -17,15 +17,16 @@ function stars(q) {
   return '*';
 }
 
+// Percentages rather than a stretched viewBox: the track has to widen with the
+// panel, and a viewBox that widens with it turns every dot into an ellipse.
 function track(finding, groups) {
-  const x = (rate) => 8 + rate * 84;
+  const x = (rate) => `${8 + rate * 84}%`;
   const dots = finding.groups.map((g) => ({ ...g, at: x(g.rate), colour: slot(groups.indexOf(g.name)) }));
-  const lo = Math.min(...dots.map((d) => d.at));
-  const hi = Math.max(...dots.map((d) => d.at));
+  const rates = finding.groups.map((g) => g.rate);
 
-  return `<svg class="track" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true">
-    <line class="rule" x1="8" y1="10" x2="92" y2="10"/>
-    <line class="span" x1="${lo}" y1="10" x2="${hi}" y2="10"/>
+  return `<svg class="track" height="20" aria-hidden="true">
+    <line class="rule" x1="8%" y1="10" x2="92%" y2="10"/>
+    <line class="span" x1="${x(Math.min(...rates))}" y1="10" x2="${x(Math.max(...rates))}" y2="10"/>
     ${dots.map((d) => `<circle class="dot" cx="${d.at}" cy="10" r="4.2" fill="${d.colour}"
         data-label="${escape(d.name)}: ${d.present} of ${d.total} (${pct(d.rate)})"/>`).join('')}
   </svg>`;

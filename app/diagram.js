@@ -24,8 +24,12 @@ export class Diagram {
     await this.viewer.importXML(xml);
 
     this.fit();
-    // The canvas resizes when the drawer opens as well as when the window does.
-    this.watching ??= new ResizeObserver(() => this.fit()).observe(this.container);
+    // The canvas is told its new size but not re-zoomed: widening the drawer
+    // takes viewport away from the diagram, it does not shrink the diagram. Fit
+    // happens once, when a process is first shown; after that the zoom is the
+    // reader's.
+    this.watching ??= new ResizeObserver(() => this.resized());
+    this.watching.observe(this.container);
 
     this.each((el) => {
       if (el.op && getPrimitive(el.op.name).model) this.mark(el.id, 'is-model');
@@ -45,6 +49,10 @@ export class Diagram {
     try { this.viewer.get('canvas').zoom('fit-viewport', 'auto'); } catch { /* not shown yet */ }
   }
 
+  resized() {
+    try { this.viewer.get('canvas').resized(); } catch { /* not shown yet */ }
+  }
+
   each(fn) {
     for (const scope of this.processes.values()) for (const { el } of walk(scope)) fn(el);
   }
@@ -57,7 +65,14 @@ export class Diagram {
 
   caption({ label = '', signature = '', shape = '', loop = '', setting = '' } = {}) {
     const box = document.getElementById('caption');
-    if (!label) { box.innerHTML = this.hint ? `<div class="hint">${this.hint}</div>` : ''; return; }
+    if (!label) {
+      // Mid-run the band holds what it last said. A start event or a gateway has
+      // nothing of its own to say, and a caption that blanks between steps reads
+      // as flicker rather than as information.
+      if (this.frozen) return;
+      box.innerHTML = this.hint ? `<div class="hint">${this.hint}</div>` : '';
+      return;
+    }
     box.innerHTML = `<div class="line"><span class="label">${label}</span>`
         + (signature ? `<span class="sig">${signature}</span>` : '')
         + (shape ? `<span class="shape">${shape}</span>` : '')
@@ -125,7 +140,7 @@ const settingLine = (params) => SETTINGS
 export function renderLegend(diagram) {
   const box = document.getElementById('legend');
   box.innerHTML = Object.entries(PRIMITIVES)
-    .map(([name, p]) => `<span data-name="${name}"${p.model ? ' class="model"' : ''}>${p.label}</span>`)
+    .map(([name, p]) => `<span data-name="${name}"${p.model ? ' class="model" title="LLM (uses a language model)"' : ''}>${p.label}</span>`)
     .join('');
 
   box.onmouseover = ({ target }) => {

@@ -29,6 +29,11 @@ const records = (items) => {
   </table></div>`;
 };
 
+const judgements = (items) => `<ul class="plain">${items.map((j) => `
+  <li><b class="${j.same ? 'yes' : 'no'}">${j.same ? 'same' : 'not'}</b>
+    ${escape(j.a ?? '')} <span class="why">· ${escape(j.b ?? '')}${j.same ? ` → ${escape(j.label ?? '')}` : ''}
+    ${j.why ? `<br/>${escape(short(j.why, 140))}` : ''}</span></li>`).join('')}</ul>`;
+
 const verdicts = (items) => `<ul class="plain">${items.map((v) => `
   <li><b class="${v.present ? 'yes' : 'no'}">${v.present ? 'yes' : 'no'}</b>
     ${escape(v.theme ?? '')}<span class="why">${escape(short(v.why || '', 120))}</span></li>`).join('')}</ul>`;
@@ -67,6 +72,8 @@ function draw(value, type, study) {
     if (innerName === 'theme') return chips(value);
     if (innerName === 'account') return accounts(value);
     if (innerName === 'verdict') return verdicts(value);
+    if (innerName === 'judgement') return judgements(value);
+    if (innerName === 'vector') return chips(value.map((v) => `${v.length} numbers`));
     if (innerName === 'pair') return pairs(value);
     if (innerName === 'finding') return '<div class="findings"></div>';
     if (innerName === 'row') return `<ol class="cards">${value.map((one) => `<li>${row(one)}</li>`).join('')}</ol>`;
@@ -76,6 +83,8 @@ function draw(value, type, study) {
 
   if (name === 'row') return row(value);
   if (name === 'verdict') return verdicts([value]);
+  if (name === 'judgement') return judgements([value]);
+  if (name === 'vector') return `<p class="lede">${value.length} numbers</p>`;
   if (typeof value === 'string') return `<p class="prose">${escape(value)}</p>`;
   return `<pre>${escape(JSON.stringify(value, null, 1))}</pre>`;
 }
@@ -104,10 +113,12 @@ export function renderLog(container, calls) {
     return;
   }
   container.innerHTML = `<ol class="log">${calls.slice(-200).map((call) => `
-    <li><details>
-      <summary><code>${escape(call.element.id)}</code> ${escape(short(call.reply, 70))}</summary>
+    <li><details ${call.error ? 'open' : ''}>
+      <summary><code>${escape(call.element.id)}</code> ${call.error ? `<span class="bad">failed: ${escape(short(call.error, 60))}</span>` : escape(short(call.text, 70))}</summary>
       <h4>instruction</h4><p class="prose">${escape(call.instruction)}</p>
       <h4>given</h4><pre>${escape(short(call.content, 1200))}</pre>
-      <h4>replied</h4><pre>${escape(call.reply)}</pre>
+      ${call.thought ? `<h4>thought</h4><p class="thought">${escape(call.thought)}</p>` : ''}
+      ${call.error ? `<h4>error</h4><p class="problem">${escape(call.error)}</p>` : ''}
+      <h4>replied</h4><pre>${escape(call.text || '(no reply)')}</pre>
     </details></li>`).join('')}</ol>`;
 }
